@@ -1,21 +1,19 @@
 mod app_error;
+mod seed_sql;
 mod types;
+
 use app_error::AppError;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
+use seed_sql::SEED_BATCH;
 use std::sync::OnceLock;
 use tauri::async_runtime::block_on;
 use tokio::sync::{Mutex, MutexGuard};
-use turso::{Builder, Connection, Database};
-use types::{Job, Punch};
-use types::{JOB_TABLE, PUNCH_TABLE, TAG_TABLE};
+use turso::{Builder, Connection};
+use types::*;
 
-use crate::types::{query_jobs, query_punches};
+pub static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
 
-pub struct Db(Database, Connection);
-
-pub static DB: OnceLock<Mutex<Db>> = OnceLock::new();
-
-pub async fn get_db<'a>() -> Result<MutexGuard<'a, Db>, AppError> {
+pub async fn get_db<'a>() -> Result<MutexGuard<'a, Connection>, AppError> {
     Ok(DB.get().unwrap().lock().await)
 }
 
@@ -28,15 +26,47 @@ pub fn parse_utc(s: Option<String>) -> Result<Option<DateTime<Utc>>, AppError> {
     }
 }
 
-async fn make_db() -> Result<Db, AppError> {
+async fn connect_db() -> Result<(), AppError> {
     let db = Builder::new_local(":memory:").build().await?;
     let conn = db.connect()?;
+    DB.set(Mutex::new(conn))
+        .or(Err("Database mutex already initialized"))?;
+    Ok(())
+}
 
-    conn.execute(JOB_TABLE, ()).await?;
-    conn.execute(PUNCH_TABLE, ()).await?;
-    conn.execute(TAG_TABLE, ()).await?;
+async fn seed_db() -> Result<(), AppError> {
+    {
+        let conn = get_db().await?;
+        conn.execute_batch(SEED_BATCH).await?;
+    }
+    add_job("Christian Challenge".to_string()).await?;
+    add_tag("Discipleship".to_string()).await?;
+    add_punch(
+        1,
+        (Utc::now() - TimeDelta::milliseconds(3200048)).to_string(),
+        Utc::now().to_string(),
+        Some(vec!["Discipleship".to_string()]),
+        Some("Met with John".to_string()),
+    )
+    .await?;
+    Ok(())
+}
 
-    Ok(Db(db, conn))
+#[tauri::command]
+async fn get_state() -> Result<AppState, AppError> {
+    let state = query_state().await?;
+    Ok(state)
+}
+
+#[tauri::command]
+async fn update_state(state: AppState) -> Result<(), AppError> {
+    let conn = get_db().await?;
+    conn.execute(
+        "UPDATE state SET job_id = ?1, theme = ?2",
+        (state.job.id, state.theme),
+    )
+    .await?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -47,7 +77,7 @@ async fn get_jobs() -> Result<Vec<Job>, AppError> {
 
 #[tauri::command]
 async fn add_job(name: String) -> Result<(), AppError> {
-    let conn = &get_db().await?.1;
+    let conn = get_db().await?;
     conn.execute("INSERT INTO jobs (name) VALUES (?1)", [name])
         .await?;
     Ok(())
@@ -83,7 +113,7 @@ async fn add_punch(
         params.push(nts);
     }
 
-    let conn = &get_db().await?.1;
+    let conn = get_db().await?;
     conn.execute(
         r#"INSERT INTO punches
             (job_id, start, end, delta, tags, notes)
@@ -101,7 +131,7 @@ async fn clock_in(job_id: u64, tags: Option<Vec<String>>) -> Result<(), AppError
     if let Some(tgs) = tags {
         params.push(tgs.join(","));
     }
-    let conn = &get_db().await?.1;
+    let conn = get_db().await?;
     conn.execute(
         r#"INSERT INTO punches
             (job_id, start, tags)
@@ -130,7 +160,7 @@ async fn clock_out(
         if let Some(nts) = notes {
             params.push(nts);
         }
-        let conn = &get_db().await?.1;
+        let conn = get_db().await?;
         conn.execute(
             r#"
             UPDATE punches
@@ -148,27 +178,48 @@ async fn clock_out(
     }
 }
 
+#[tauri::command]
+async fn get_tags() -> Result<Vec<String>, AppError> {
+    let tags = query_tags("", ()).await?;
+    Ok(tags)
+}
+
+#[tauri::command]
+async fn add_tag(name: String) -> Result<(), AppError> {
+    let conn = get_db().await?;
+    conn.execute("INSERT INTO tags (name) VALUES (?1)", [name])
+        .await?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|_| {
-            let _: Result<(), AppError> = block_on(async move {
-                match DB.set(Mutex::new(make_db().await?)) {
-                    Ok(_) => Ok(()),
-                    Err(_) => Err(AppError("Database Mutex Already Initialized".to_string())),
-                }
+            let res: Result<(), AppError> = block_on(async move {
+                connect_db().await?;
+                seed_db().await?;
+                Ok(())
             });
+            match res {
+                Ok(_) => {}
+                Err(e) => eprintln!("{}", e.0),
+            }
             Ok(())
         })
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            get_state,
+            update_state,
             get_jobs,
             add_job,
             get_punches,
             add_punch,
             clock_in,
             clock_out,
+            get_tags,
+            add_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running timestamp app");

@@ -1,18 +1,19 @@
-export class Job {
-  id: number = 0;
-  name: string = "Job";
-}
+export type Job = {
+  id: number;
+  name: string;
+};
 
-export class Punch {
-  id: number = 0;
+export type Punch = {
+  id: number;
   jobId: number;
-  start: Date = new Date();
-  end: Date = new Date();
+  start: Date;
+  end: Date | undefined;
   delta: number | undefined;
   tags: string[] | undefined;
   notes: string | undefined;
+};
 
-  constructor(jobId: number) {
-    this.jobId = jobId;
-  }
-}
+export type State = {
+  job: Job;
+  theme: string;
+};

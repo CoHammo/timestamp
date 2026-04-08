@@ -11,6 +11,20 @@ use serde::Serialize;
 pub struct AppError(pub String);
 
 // impl std::fmt::Display for AppError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "AppError({})", self.0)
+//     }
+// }
+
+// impl Error for AppError {}
+
+// impl ToString for AppError {
+//     fn to_string(&self) -> String {
+//         return self.0.clone();
+//     }
+// }
+
+// impl std::fmt::Display for AppError {
 //     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 //         write!(f, "Error: {}", self)
 //     }
