@@ -49,6 +49,7 @@ async fn seed_db() -> Result<(), AppError> {
         Some("Met with John".to_string()),
     )
     .await?;
+    clock_in(1, None).await?;
     Ok(())
 }
 
@@ -85,7 +86,7 @@ async fn add_job(name: String) -> Result<(), AppError> {
 
 #[tauri::command]
 async fn get_punches(job_id: u64) -> Result<Vec<Punch>, AppError> {
-    let punches = query_punches("WHERE job_id = ?1", [job_id]).await?;
+    let punches = query_punches("WHERE job_id = ?1 ORDER BY start DESC", [job_id]).await?;
     Ok(punches)
 }
 
@@ -125,54 +126,44 @@ async fn add_punch(
 }
 
 #[tauri::command]
-async fn clock_in(job_id: u64, tags: Option<Vec<String>>) -> Result<(), AppError> {
+async fn clock_in(job_id: u64, tags: Option<Vec<String>>) -> Result<Punch, AppError> {
     let start = Utc::now();
     let mut params: Vec<String> = vec![job_id.to_string(), start.to_string()];
     if let Some(tgs) = tags {
         params.push(tgs.join(","));
     }
-    let conn = get_db().await?;
-    conn.execute(
-        r#"INSERT INTO punches
-            (job_id, start, tags)
-            VALUES (?1, ?2, ?3)"#,
-        params,
-    )
-    .await?;
-    Ok(())
-}
-
-#[tauri::command]
-async fn clock_out(
-    job_id: u64,
-    tags: Option<Vec<String>>,
-    notes: Option<String>,
-) -> Result<(), AppError> {
-    let end = Utc::now();
-    let punches = query_punches("WHERE job_id = ?1 AND end IS NULL LIMIT 1", [job_id]).await?;
-    if let Some(punch) = punches.get(0) {
-        let delta = (end - punch.start).num_milliseconds();
-        let mut params: Vec<String> =
-            vec![punch.id.to_string(), end.to_string(), delta.to_string()];
-        if let Some(tgs) = tags {
-            params.push(tgs.join(","));
-        }
-        if let Some(nts) = notes {
-            params.push(nts);
-        }
+    {
         let conn = get_db().await?;
         conn.execute(
-            r#"
-            UPDATE punches
-            SET end = ?2,
-                delta = ?3,
-                tags = ?4,
-                notes = ?5
-            WHERE id = ?1"#,
+            "INSERT INTO punches (job_id, start, tags) VALUES (?1, ?2, ?3)",
             params,
         )
         .await?;
-        Ok(())
+    }
+    let punch = query_punches("WHERE job_id = ?1 AND end IS NULL LIMIT 1", [job_id])
+        .await?
+        .pop()
+        .unwrap();
+    Ok(punch)
+}
+
+#[tauri::command]
+async fn clock_out(job_id: u64) -> Result<Punch, AppError> {
+    let end = Utc::now();
+    let punch_opt = query_punches("WHERE job_id = ?1 AND end IS NULL LIMIT 1", [job_id])
+        .await?
+        .pop();
+    if let Some(mut punch) = punch_opt {
+        let delta = (end - punch.start).num_milliseconds();
+        let conn = get_db().await?;
+        conn.execute(
+            "UPDATE punches SET end = ?2, delta = ?3 WHERE id = ?1",
+            (punch.id, end.to_string(), delta),
+        )
+        .await?;
+        punch.end = Some(end);
+        punch.delta = Some(delta);
+        Ok(punch)
     } else {
         Err("Not clocked in")?
     }

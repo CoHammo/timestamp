@@ -6,11 +6,7 @@ export const punches: { list: Punch[] } = $state({ list: [] });
 export const state: { state: State | undefined } = $state({ state: undefined });
 
 export async function getState() {
-  try {
-    state.state = await invoke("get_state");
-  } catch (e) {
-    console.log(e);
-  }
+  state.state = await invoke("get_state");
   console.log(JSON.stringify(state, null, 2));
 }
 
@@ -19,11 +15,15 @@ export async function getJobs() {
   console.log(JSON.stringify(jobs.list, null, 2));
 }
 
+export function correctPunch(punch: Punch) {
+  punch.start = new Date(punch.start);
+  punch.end = punch.end ? new Date(punch.end) : undefined;
+}
+
 export async function getPunches(jobId: number) {
   punches.list = await invoke("get_punches", { jobId });
   for (const punch of punches.list) {
-    punch.start = new Date(punch.start);
-    punch.end = punch.end ? new Date(punch.end) : undefined;
+    correctPunch(punch);
   }
   console.log(JSON.stringify(punches.list, null, 2));
 }

@@ -27,7 +27,7 @@ pub async fn query_jobs(
     Ok(jobs)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Punch {
     pub id: u64,
     pub job_id: u64,
@@ -79,7 +79,7 @@ pub async fn query_tags(
     Ok(tags)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AppState {
     pub job: Job,
     pub theme: String,
