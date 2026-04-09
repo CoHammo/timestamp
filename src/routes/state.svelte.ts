@@ -3,11 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const jobs: { list: Job[] } = $state({ list: [] });
 export const punches: { list: Punch[] } = $state({ list: [] });
-export const state: { state: State | undefined } = $state({ state: undefined });
+export const things: { state: State | undefined } = $state({
+  state: undefined,
+});
 
 export async function getState() {
-  state.state = await invoke("get_state");
-  console.log(JSON.stringify(state, null, 2));
+  things.state = await invoke("get_state");
+  console.log(JSON.stringify(things, null, 2));
 }
 
 export async function getJobs() {
@@ -31,7 +33,7 @@ export async function getPunches(jobId: number) {
 export async function init() {
   try {
     await getJobs();
-    await getPunches(state.state?.job.id ?? 1);
+    await getPunches(things.state?.job.id ?? 1);
     await getState();
   } catch (e) {
     console.log(e);

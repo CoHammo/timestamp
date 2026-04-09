@@ -87,10 +87,10 @@
                 <span class="text-[1.35rem] font-semibold"
                     >{delta.minutes}m</span
                 >
-                <span class="text-[1rem] -mt-0.5">{delta.seconds}s</span>
+                <span class="text-[1rem] -mt-1">{delta.seconds}s</span>
             {:else}
                 <span class="text-[1.35rem] font-semibold">{delta.hours}h</span>
-                <span class="text-[1rem] -mt-0.5">{delta.minutes}m</span>
+                <span class="text-[1rem] -mt-1">{delta.minutes}m</span>
             {/if}
         </div>
     </div>
