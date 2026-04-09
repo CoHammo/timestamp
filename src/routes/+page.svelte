@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Modal, PunchCard, type Punch } from "$lib";
+    import { PunchCard, type Punch, PunchEditor } from "$lib";
     import { onMount } from "svelte";
     import {
         jobs,
@@ -21,8 +21,7 @@
     });
 
     let clockedIn = $derived(punches.list[0]?.end == undefined);
-
-    let modal: Modal | undefined = $state();
+    let modal: PunchEditor | undefined = $state();
 </script>
 
 <main class="h-screen flex flex-col">
@@ -65,9 +64,7 @@
         <!-- Add Punch Entry Button -->
         <button
             class="btn bg-blue-600 flex-1 text-white border-none rounded-md text-[1rem]/5 gap-2 focus:border-none focus:outline-none"
-            onclick={() => {
-                modal?.open();
-            }}
+            onclick={() => modal?.open(punches.list[0])}
         >
             <div>
                 <AddClock size={22} />
@@ -115,6 +112,8 @@
     </div>
 </main>
 
-<Modal bind:this={modal}>
+<PunchEditor bind:this={modal} />
+
+<!-- <Modal bind:this={modal}>
     <div>Hello There</div>
-</Modal>
+</Modal> -->

@@ -14,10 +14,10 @@
 
 <dialog bind:this={modal} class="modal">
     <div
-        class="modal-box bg-white rounded-md p-0 min-h-18 max-w-100 duration-100"
+        class="modal-box bg-white rounded-md p-0 min-h-18 max-w-140 duration-100"
     >
         <button
-            class="btn btn-circle bg-none border-none hover:bg-gray-200 absolute right-1 top-1"
+            class="btn btn-circle bg-none border-none w-10 h-10 hover:bg-gray-200 absolute right-1 top-1"
             onclick={close}>X</button
         >
         {@render children()}
