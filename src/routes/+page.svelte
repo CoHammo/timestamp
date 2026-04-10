@@ -1,14 +1,7 @@
 <script lang="ts">
-    import { PunchCard, type Punch, PunchEditor } from "$lib";
+    import { PunchCard, type PunchType, PunchEditor, Punch } from "$lib";
     import { onMount } from "svelte";
-    import {
-        jobs,
-        punches,
-        things,
-        init,
-        correctPunch,
-        getPunches,
-    } from "./state.svelte";
+    import { jobs, punches, things, init, getPunches } from "./state.svelte";
     import Menu from "@lucide/svelte/icons/menu";
     import Settings from "@lucide/svelte/icons/settings";
     import Play from "@lucide/svelte/icons/play";
@@ -60,10 +53,10 @@
     </div>
 
     <!-- Bottom Buttons -->
-    <div class="bg-amber-200 mt-auto p-2 flex gap-2">
+    <div class="mt-auto p-2 flex gap-2">
         <!-- Add Punch Entry Button -->
         <button
-            class="btn bg-blue-600 flex-1 text-white border-none rounded-md text-[1rem]/5 gap-2 focus:border-none focus:outline-none"
+            class="btn bg-blue-600 flex-1 text-white border-none rounded-md text-[1rem]/4 gap-2 focus:border-none focus:outline-none"
             onclick={() => modal?.open(punches.list[0])}
         >
             <div>
@@ -76,21 +69,20 @@
         <button
             class="btn border-none {clockedIn
                 ? 'bg-red-500'
-                : 'bg-green-600'} rounded-md text-white text-[1rem]/5 flex-1"
+                : 'bg-green-600'} rounded-md text-white text-[1rem]/4 flex-1"
             onclick={async () => {
                 try {
                     if (clockedIn) {
-                        let punch: Punch = await invoke("clock_out", {
+                        let p: PunchType = await invoke("clock_out", {
                             jobId: things.state?.job.id,
                         });
-                        correctPunch(punch);
-                        punches.list[0] = punch;
+                        punches.list[0].clearTimer();
+                        punches.list[0] = new Punch(p);
                     } else {
-                        let punch: Punch = await invoke("clock_in", {
+                        let p: PunchType = await invoke("clock_in", {
                             jobId: things.state?.job.id,
                         });
-                        correctPunch(punch);
-                        punches.list.splice(0, 0, punch);
+                        punches.list.splice(0, 0, new Punch(p));
                     }
                 } catch (e) {
                     console.log(e);

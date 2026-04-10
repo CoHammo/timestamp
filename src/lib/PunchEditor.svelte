@@ -19,16 +19,16 @@
 </script>
 
 <Modal bind:this={modal}>
-    <div class="flex flex-col gap-2 p-3">
-        <h2 class="text-lg font-bold text-center px-8 mb-2">
+    <div class="flex flex-col gap-2 p-2">
+        <h2 class="font-bold text-center px-8 my-1 text-[1.2rem]">
             {punch?.start.toLocaleDateString([], { weekday: "long" })},
             {punch?.start.toLocaleDateString([], {
                 month: "long",
                 day: "numeric",
             })}
         </h2>
-        <div class="flex gap-2 text-center">
-            <div class="flex flex-col bg-slate-300/90 rounded p-2 flex-1">
+        <div class="flex gap-2 text-center text-[1.1rem]">
+            <div class="flex flex-col bg-slate-300/80 rounded p-2 flex-1">
                 <span>
                     {punch?.start.toLocaleDateString([])}
                 </span>
@@ -39,7 +39,7 @@
                     })}
                 </span>
             </div>
-            <div class="flex flex-col bg-slate-300/90 rounded p-2 flex-1">
+            <div class="flex flex-col bg-slate-300/80 rounded p-2 flex-1">
                 <span>
                     {punch?.end?.toLocaleDateString([])}
                 </span>
@@ -51,19 +51,29 @@
                 </span>
             </div>
         </div>
+        <div class="bg-slate-300/80 rounded"></div>
         <textarea
             name="notes"
             id="notebox"
-            rows="3"
+            rows="4"
             value={punch?.notes}
             placeholder="Notes here..."
-            class="bg-slate-100 p-2 rounded outline focus:outline focus:outline-offset-0 focus:outline-black focus:bg-slate-200 transition-all duration-300"
+            class="bg-slate-100 p-2 rounded focus:bg-slate-200 focus:outline-none transition-all duration-300"
         ></textarea>
-        <button class="flex gap-1 p-1 hover:cursor-pointer">
-            <Tags size={22} color="blue" />
-            {#each punch?.tags as tag}
-                <TagCard {tag} />
-            {/each}
+        <button class="flex gap-1 p-1 my-1 hover:cursor-pointer">
+            <div>
+                <Tags size={22} color="blue" />
+            </div>
+            <div class="flex flex-wrap">
+                {#each punch?.tags as tag}
+                    <TagCard {tag} />
+                {/each}
+            </div>
+        </button>
+        <button
+            class="btn outline-none border-none bg-blue-600 rounded text-lg text-white h-8 m-0"
+        >
+            Save
         </button>
     </div>
 </Modal>
