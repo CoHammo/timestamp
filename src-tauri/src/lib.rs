@@ -41,13 +41,15 @@ async fn seed_db() -> Result<(), AppError> {
     }
     add_job("Christian Challenge".to_string()).await?;
     add_tag("Discipleship".to_string()).await?;
-    add_punch(
-        1,
-        (Utc::now() - TimeDelta::milliseconds(3200048)).to_string(),
-        Utc::now().to_string(),
-        Some(vec!["Discipleship".to_string()]),
-        Some("Met with John".to_string()),
-    )
+    add_punch(Punch {
+        id: 0,
+        job_id: 1,
+        start: (Utc::now() - TimeDelta::milliseconds(3200048)),
+        end: Some(Utc::now()),
+        delta: None,
+        tags: Some(vec!["Discipleship".to_string()]),
+        notes: Some("Met with John".to_string()),
+    })
     .await?;
     clock_in(1, None).await?;
     Ok(())
@@ -85,45 +87,145 @@ async fn add_job(name: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+async fn edit_job(job: Job) -> Result<(), AppError> {
+    let conn = get_db().await?;
+    conn.execute(
+        "UPDATE jobs SET name = ?1 WHERE id = ?2",
+        (job.name, job.id),
+    )
+    .await?;
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_punches(job_id: u64) -> Result<Vec<Punch>, AppError> {
     let punches = query_punches("WHERE job_id = ?1 ORDER BY start DESC", [job_id]).await?;
     Ok(punches)
 }
 
 #[tauri::command]
-async fn add_punch(
-    job_id: u64,
-    start: String,
-    end: String,
-    tags: Option<Vec<String>>,
-    notes: Option<String>,
-) -> Result<(), AppError> {
-    let start_utc: DateTime<Utc> = start.parse()?;
-    let end_utc: DateTime<Utc> = end.parse()?;
-    let delta = (end_utc - start_utc).num_milliseconds();
-    let mut params: Vec<String> = vec![
-        job_id.to_string(),
-        start_utc.to_string(),
-        end_utc.to_string(),
-        delta.to_string(),
-    ];
-    if let Some(tgs) = tags {
-        params.push(tgs.join(","));
-    }
-    if let Some(nts) = notes {
-        params.push(nts);
-    }
-
+async fn add_punch(punch: Punch) -> Result<(), AppError> {
+    let delta: u64 = (punch.end.unwrap() - punch.start)
+        .num_milliseconds()
+        .try_into()?;
     let conn = get_db().await?;
     conn.execute(
         r#"INSERT INTO punches
             (job_id, start, end, delta, tags, notes)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
-        params,
+        (
+            punch.job_id,
+            punch.start.to_string(),
+            punch.end.map(|e| e.to_string()),
+            delta,
+            punch.tags.map(|s| s.join(",")),
+            punch.notes,
+        ),
     )
     .await?;
     Ok(())
 }
+
+#[tauri::command]
+async fn edit_punch(punch: Punch) -> Result<(), AppError> {
+    let delta: u64 = (punch.end.unwrap() - punch.start)
+        .num_milliseconds()
+        .try_into()?;
+    let conn = get_db().await?;
+    conn.execute(
+        r#"INSERT INTO punches
+            (job_id, start, end, delta, tags, notes)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT DO UPDATE
+            SET end = ?3, delta = ?4, tags = ?5, notes = ?6
+            WHERE job_id = ?1 AND start = ?2"#,
+        (
+            punch.job_id,
+            punch.start.to_string(),
+            punch.end.map(|e| e.to_string()),
+            delta,
+            punch.tags.map(|s| s.join(",")),
+            punch.notes,
+        ),
+    )
+    .await?;
+    Ok(())
+}
+
+// #[tauri::command]
+// async fn add_punch(
+//     job_id: u64,
+//     start: String,
+//     end: String,
+//     tags: Option<Vec<String>>,
+//     notes: Option<String>,
+// ) -> Result<(), AppError> {
+//     let start_utc: DateTime<Utc> = start.parse()?;
+//     let end_utc: DateTime<Utc> = end.parse()?;
+//     let delta = (end_utc - start_utc).num_milliseconds();
+//     let mut params: Vec<String> = vec![
+//         job_id.to_string(),
+//         start_utc.to_string(),
+//         end_utc.to_string(),
+//         delta.to_string(),
+//     ];
+//     if let Some(tgs) = tags {
+//         params.push(tgs.join(","));
+//     }
+//     if let Some(nts) = notes {
+//         params.push(nts);
+//     }
+
+//     let conn = get_db().await?;
+//     conn.execute(
+//         r#"INSERT INTO punches
+//             (job_id, start, end, delta, tags, notes)
+//             VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
+//         params,
+//     )
+//     .await?;
+//     Ok(())
+// }
+
+// #[tauri::command]
+// async fn edit_punch(
+//     id: u64,
+//     start: String,
+//     end: String,
+//     tags: Option<Vec<String>>,
+//     notes: Option<String>,
+// ) -> Result<(), AppError> {
+//     let conn = get_db().await?;
+//     let start_utc: DateTime<Utc> = start.parse()?;
+//     let end_utc: DateTime<Utc> = end.parse()?;
+//     let delta = (end_utc - start_utc).num_milliseconds();
+//     let mut params: Vec<String> = vec![
+//         id.to_string(),
+//         start_utc.to_string(),
+//         end_utc.to_string(),
+//         delta.to_string(),
+//     ];
+//     if let Some(tgs) = tags {
+//         params.push(tgs.join(","));
+//     }
+//     if let Some(nts) = notes {
+//         params.push(nts);
+//     }
+//     conn.execute(
+//         r#"
+//         UPDATE punches SET
+//             start = ?2,
+//             end = ?3,
+//             delta = ?4,
+//             tags = ?5,
+//             notes = ?6
+//         WHERE id = ?1"#,
+//         params,
+//     )
+//     .await?;
+
+//     Ok(())
+// }
 
 #[tauri::command]
 async fn clock_in(job_id: u64, tags: Option<Vec<String>>) -> Result<Punch, AppError> {
@@ -154,7 +256,7 @@ async fn clock_out(job_id: u64) -> Result<Punch, AppError> {
         .await?
         .pop();
     if let Some(mut punch) = punch_opt {
-        let delta = (end - punch.start).num_milliseconds();
+        let delta: u64 = (end - punch.start).num_milliseconds().try_into()?;
         let conn = get_db().await?;
         conn.execute(
             "UPDATE punches SET end = ?2, delta = ?3 WHERE id = ?1",
@@ -205,8 +307,10 @@ pub fn run() {
             update_state,
             get_jobs,
             add_job,
+            edit_job,
             get_punches,
             add_punch,
+            edit_punch,
             clock_in,
             clock_out,
             get_tags,

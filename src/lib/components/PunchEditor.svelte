@@ -1,11 +1,12 @@
 <script lang="ts">
     import Tags from "@lucide/svelte/icons/tags";
-    import { Modal, type Punch, TagCard } from "./index";
+    import { Modal, TagCard } from "./index";
+    import { Punch } from "../types.svelte";
+    import { invoke } from "@tauri-apps/api/core";
+    import { addOrEditPunch } from "$lib/state_commands.svelte";
 
-    // let { punch }: { punch: Punch } = $props();
-
-    let punch: Punch | undefined = $state();
     let modal: Modal | undefined = $state();
+    let punch: Punch | undefined = $state();
 
     export function open(p: Punch) {
         punch = p;
@@ -39,19 +40,37 @@
                     })}
                 </span>
             </div>
-            <div class="flex flex-col bg-slate-300/80 rounded p-2 flex-1">
-                <span>
-                    {punch?.end?.toLocaleDateString([])}
-                </span>
-                <span>
-                    {punch?.end?.toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                    })}
-                </span>
+            <div
+                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 justify-center items-center"
+            >
+                {#if punch?.end != null}
+                    <span>
+                        {punch?.end?.toLocaleDateString([])}
+                    </span>
+                    <span>
+                        {punch?.end?.toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                        })}
+                    </span>
+                {:else}
+                    <span class="font-bold">
+                        {punch?.dDelta.hours}h
+                        {punch?.dDelta.minutes}m
+                        {punch?.dDelta.seconds}s
+                    </span>
+                {/if}
             </div>
         </div>
-        <div class="bg-slate-300/80 rounded"></div>
+        {#if punch?.end != null}
+            <div
+                class="bg-slate-300/80 rounded p-2 text-center font-bold text-[1.2rem]"
+            >
+                {punch?.dDelta.hours}h
+                {punch?.dDelta.minutes}m
+                {punch?.dDelta.seconds}s
+            </div>
+        {/if}
         <textarea
             name="notes"
             id="notebox"
@@ -68,10 +87,14 @@
                 {#each punch?.tags as tag}
                     <TagCard {tag} />
                 {/each}
+                {#if punch?.tags == undefined}
+                    <span class="text-gray-600">No Tags...</span>
+                {/if}
             </div>
         </button>
         <button
             class="btn outline-none border-none bg-blue-600 rounded text-lg text-white h-8 m-0"
+            onclick={async () => await addOrEditPunch(punch!)}
         >
             Save
         </button>

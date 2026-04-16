@@ -33,7 +33,7 @@ pub struct Punch {
     pub job_id: u64,
     pub start: DateTime<Utc>,
     pub end: Option<DateTime<Utc>>,
-    pub delta: Option<i64>,
+    pub delta: Option<u64>,
     pub tags: Option<Vec<String>>,
     pub notes: Option<String>,
 }

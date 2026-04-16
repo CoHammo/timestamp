@@ -1,15 +1,19 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { Punch, TagCard } from "./index";
+    import { TagCard, PunchEditor } from "./index";
+    import { Punch } from "../types.svelte";
     import Tags from "@lucide/svelte/icons/tags";
 
     let { punch }: { punch: Punch } = $props();
+
+    let editor: PunchEditor | undefined = $state();
 </script>
 
 <button
     class="flex flex-col {punch.end == undefined
         ? 'bg-blue-200'
-        : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer"
+        : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer focus:outline-none"
+    onclick={() => editor?.open(punch, false)}
 >
     <!-- Data -->
     <div class="flex items-center justify-between">
@@ -62,3 +66,5 @@
         </div>
     {/if}
 </button>
+
+<PunchEditor bind:this={editor} />

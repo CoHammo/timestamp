@@ -5,7 +5,7 @@ export type Job = {
 
 export type PunchType = {
   id: number;
-  jobId: number;
+  job_id: number;
   start: string;
   end: string | undefined;
   delta: number | undefined;
@@ -15,7 +15,7 @@ export type PunchType = {
 
 export class Punch {
   id: number;
-  jobId: number;
+  job_id: number;
   start: Date;
   end: Date | undefined;
   delta: number | undefined = $state();
@@ -31,7 +31,7 @@ export class Punch {
 
   constructor(p: PunchType) {
     this.id = p.id;
-    this.jobId = p.jobId;
+    this.job_id = p.job_id;
     this.start = new Date(p.start);
     this.end = p.end ? new Date(p.end) : undefined;
     this.delta = p.delta;
@@ -41,9 +41,22 @@ export class Punch {
     if (this.end == undefined) {
       this.intervalId = setInterval(() => {
         this.delta = Date.now() - this.start.getTime();
-        console.log(`Delta Time: ${this.delta}`);
       }, 1000);
     }
+  }
+
+  static new(job_id: number): Punch {
+    let p = new Punch({
+      id: 0,
+      job_id: job_id,
+      start: new Date().toISOString(),
+      end: new Date().toISOString(),
+      delta: undefined,
+      tags: undefined,
+      notes: undefined,
+    });
+    console.log(JSON.stringify(p, null, 2));
+    return p;
   }
 
   clearTimer() {

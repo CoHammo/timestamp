@@ -1,20 +1,26 @@
 <script lang="ts">
-    import { PunchCard, type PunchType, PunchEditor, Punch } from "$lib";
+    import { PunchCard, PunchEditor } from "$lib/components";
+    import { type PunchType, Punch } from "$lib/types.svelte";
+    import {
+        jobs,
+        punches,
+        appState,
+        clockedIn,
+        init,
+        toggleClockedIn,
+    } from "$lib/state_commands.svelte";
     import { onMount } from "svelte";
-    import { jobs, punches, things, init, getPunches } from "./state.svelte";
     import Menu from "@lucide/svelte/icons/menu";
     import Settings from "@lucide/svelte/icons/settings";
     import Play from "@lucide/svelte/icons/play";
     import Stop from "@lucide/svelte/icons/square";
     import AddClock from "@lucide/svelte/icons/clock-plus";
-    import { invoke } from "@tauri-apps/api/core";
 
     onMount(async () => {
         await init();
     });
 
-    let clockedIn = $derived(punches.list[0]?.end == undefined);
-    let modal: PunchEditor | undefined = $state();
+    let newPuncher: PunchEditor | undefined = $state();
 </script>
 
 <main class="h-screen flex flex-col">
@@ -32,7 +38,7 @@
                 class="btn border-none bg-none hover:bg-white/20 px-3 rounded-md flex-1 justify-start"
             >
                 <h1 class="text-[1.3rem] font-bold">
-                    {things.state?.job.name}
+                    {appState.state?.job.name}
                 </h1>
             </button>
         </div>
@@ -54,10 +60,10 @@
 
     <!-- Bottom Buttons -->
     <div class="mt-auto p-2 flex gap-2">
-        <!-- Add Punch Entry Button -->
         <button
             class="btn bg-blue-600 flex-1 text-white border-none rounded-md text-[1rem]/4 gap-2 focus:border-none focus:outline-none"
-            onclick={() => modal?.open(punches.list[0])}
+            onclick={() =>
+                newPuncher?.open(Punch.new(appState.state?.job.id ?? 0))}
         >
             <div>
                 <AddClock size={22} />
@@ -65,31 +71,13 @@
             Add Entry
         </button>
 
-        <!-- Clock In/Out Button -->
         <button
-            class="btn border-none {clockedIn
+            class="btn border-none {clockedIn()
                 ? 'bg-red-500'
                 : 'bg-green-600'} rounded-md text-white text-[1rem]/4 flex-1"
-            onclick={async () => {
-                try {
-                    if (clockedIn) {
-                        let p: PunchType = await invoke("clock_out", {
-                            jobId: things.state?.job.id,
-                        });
-                        punches.list[0].clearTimer();
-                        punches.list[0] = new Punch(p);
-                    } else {
-                        let p: PunchType = await invoke("clock_in", {
-                            jobId: things.state?.job.id,
-                        });
-                        punches.list.splice(0, 0, new Punch(p));
-                    }
-                } catch (e) {
-                    console.log(e);
-                }
-            }}
+            onclick={async () => await toggleClockedIn()}
         >
-            {#if clockedIn}
+            {#if clockedIn()}
                 <div>
                     <Stop fill="white" size={22} />
                 </div>
@@ -104,8 +92,4 @@
     </div>
 </main>
 
-<PunchEditor bind:this={modal} />
-
-<!-- <Modal bind:this={modal}>
-    <div>Hello There</div>
-</Modal> -->
+<PunchEditor bind:this={newPuncher} />
