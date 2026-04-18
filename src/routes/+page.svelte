@@ -7,7 +7,7 @@
         appState,
         clockedIn,
         init,
-        toggleClockedIn,
+        toggleClockIn,
     } from "$lib/state_commands.svelte";
     import { onMount } from "svelte";
     import Menu from "@lucide/svelte/icons/menu";
@@ -59,11 +59,11 @@
     </div>
 
     <!-- Bottom Buttons -->
-    <div class="mt-auto p-2 flex gap-2">
+    <div class="flex flex-wrap mt-auto p-1.5 gap-1.5">
         <button
-            class="btn bg-blue-600 flex-1 text-white border-none rounded-md text-[1rem]/4 gap-2 focus:border-none focus:outline-none"
+            class="btn flex-1 bg-blue-600 text-white text-[1rem]/4 text-nowrap border-none rounded-md gap-2 focus:border-none focus:outline-none"
             onclick={() =>
-                newPuncher?.open(Punch.new(appState.state?.job.id ?? 0))}
+                newPuncher?.open(new Punch(appState.state?.job.id ?? 0))}
         >
             <div>
                 <AddClock size={22} />
@@ -72,10 +72,10 @@
         </button>
 
         <button
-            class="btn border-none {clockedIn()
+            class="btn border-none flex-1 {clockedIn()
                 ? 'bg-red-500'
-                : 'bg-green-600'} rounded-md text-white text-[1rem]/4 flex-1"
-            onclick={async () => await toggleClockedIn()}
+                : 'bg-green-600'} rounded-md text-white text-[1rem]/4 text-nowrap"
+            onclick={async () => await toggleClockIn()}
         >
             {#if clockedIn()}
                 <div>

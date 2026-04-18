@@ -13,7 +13,7 @@
     class="flex flex-col {punch.end == undefined
         ? 'bg-blue-200'
         : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer focus:outline-none"
-    onclick={() => editor?.open(punch, false)}
+    onclick={() => editor?.open(punch)}
 >
     <!-- Data -->
     <div class="flex items-center justify-between">
@@ -56,8 +56,10 @@
 
     <!-- Tags -->
     {#if punch.tags != undefined}
-        <div class="mb-1 mt-2 flex items-center gap-2">
-            <Tags size={20} color="blue" />
+        <div class="flex items-center gap-2 mt-3 mb-1">
+            <div>
+                <Tags size={20} color="blue" />
+            </div>
             <div class="flex overflow-x-auto gap-1">
                 {#each punch.tags as tag}
                     <TagCard {tag} />

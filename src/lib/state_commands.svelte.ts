@@ -20,10 +20,10 @@ export async function getJobs() {
 }
 
 export async function getPunches(jobId: number) {
-  let ps: PunchType[] = await invoke("get_punches", { jobId });
+  let punchTypes: PunchType[] = await invoke("get_punches", { jobId });
   punches.list = [];
-  for (const punch of ps) {
-    punches.list.push(new Punch(punch));
+  for (const punch of punchTypes) {
+    punches.list.push(Punch.fromType(punch));
   }
 }
 
@@ -37,19 +37,19 @@ export async function init() {
   }
 }
 
-export async function toggleClockedIn() {
+export async function toggleClockIn() {
   try {
     if (isClockedIn) {
       let p: PunchType = await invoke("clock_out", {
         jobId: appState.state?.job.id,
       });
       punches.list[0].clearTimer();
-      punches.list[0] = new Punch(p);
+      punches.list[0] = Punch.fromType(p);
     } else {
       let p: PunchType = await invoke("clock_in", {
         jobId: appState.state?.job.id,
       });
-      punches.list.splice(0, 0, new Punch(p));
+      punches.list.splice(0, 0, Punch.fromType(p));
     }
   } catch (e) {
     console.log(e);

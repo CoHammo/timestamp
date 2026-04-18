@@ -1,14 +1,24 @@
-export type Job = {
+export type JobType = {
   id: number;
   name: string;
 };
+
+export class Job {
+  id: number = 0;
+  name: string = "Job";
+
+  fromType(job: JobType) {
+    this.id = job.id;
+    this.name = job.name;
+  }
+}
 
 export type PunchType = {
   id: number;
   job_id: number;
   start: string;
   end: string | undefined;
-  delta: number | undefined;
+  delta: number;
   tags: string[] | undefined;
   notes: string | undefined;
 };
@@ -18,55 +28,70 @@ export class Punch {
   job_id: number;
   start: Date;
   end: Date | undefined;
-  delta: number | undefined = $state();
+  #delta: number = 0;
+  get delta() {
+    return this.#delta;
+  }
+  set delta(d: number) {
+    this.#delta = d;
+    this.formatDelta();
+  }
   dDelta: {
     hours: number;
     minutes: number;
     seconds: number;
     str: string;
-  } = $derived(this.formatDelta());
+  } = { hours: 0, minutes: 0, seconds: 0, str: "00:00:00" };
   tags: string[] | undefined;
   notes: string | undefined;
-  intervalId: number | undefined;
+  #intervalId: number | undefined;
 
-  constructor(p: PunchType) {
-    this.id = p.id;
-    this.job_id = p.job_id;
-    this.start = new Date(p.start);
-    this.end = p.end ? new Date(p.end) : undefined;
-    this.delta = p.delta;
-    this.tags = p.tags;
-    this.notes = p.notes;
+  constructor(job_id: number, date: Date = new Date()) {
+    this.id = 0;
+    this.job_id = job_id;
+    this.start = date;
+    this.end = date;
+    this.delta = 0;
+  }
 
-    if (this.end == undefined) {
-      this.intervalId = setInterval(() => {
+  static fromType(p: PunchType) {
+    let punch = new Punch(p.job_id, new Date(p.start));
+    punch.id = p.id;
+    punch.end = p.end ? new Date(p.end) : undefined;
+    punch.delta = p.delta;
+    punch.tags = p.tags;
+    punch.notes = p.notes;
+    punch.setTimer();
+    return punch;
+  }
+
+  copy(): Punch {
+    let punch = new Punch(this.job_id, new Date(this.start));
+    punch.id = this.id;
+    punch.end = this.end != undefined ? new Date(this.end) : undefined;
+    punch.delta = this.delta;
+    punch.tags = this.tags != undefined ? [...this.tags] : undefined;
+    punch.notes = this.notes;
+    punch.setTimer();
+    return punch;
+  }
+
+  setTimer() {
+    if (this.end == undefined && this.#intervalId === undefined) {
+      this.#intervalId = setInterval(() => {
         this.delta = Date.now() - this.start.getTime();
       }, 1000);
     }
   }
 
-  static new(job_id: number): Punch {
-    let p = new Punch({
-      id: 0,
-      job_id: job_id,
-      start: new Date().toISOString(),
-      end: new Date().toISOString(),
-      delta: undefined,
-      tags: undefined,
-      notes: undefined,
-    });
-    console.log(JSON.stringify(p, null, 2));
-    return p;
-  }
-
   clearTimer() {
-    clearInterval(this.intervalId);
+    clearInterval(this.#intervalId);
+    this.#intervalId = undefined;
   }
 
   formatDelta() {
-    const ms = this.delta ?? 0;
     // 1. Calculate total units
-    const totalSeconds = Math.floor(ms / 1000);
+    const totalSeconds = Math.floor(this.delta / 1000);
     const totalMinutes = Math.floor(totalSeconds / 60);
 
     // 2. Extract remaining parts using the modulo operator (%)
@@ -76,12 +101,13 @@ export class Punch {
 
     // 3. Helper to add leading zeros
     const pad = (num: number) => num.toString().padStart(2, "0");
-    return {
+    this.dDelta = {
       hours,
       minutes,
       seconds,
       str: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`,
     };
+    return this.dDelta;
   }
 }
 

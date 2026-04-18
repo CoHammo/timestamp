@@ -24,8 +24,9 @@ INSERT INTO tags (name) VALUES ('Admin');
 CREATE TABLE IF NOT EXISTS state (
     id INTEGER PRIMARY KEY,
     job_id INTEGER NOT NULL DEFAULT 1,
+    clocked_in INTEGER NOT NULL,
     theme TEXT NOT NULL DEFAULT 'light',
     FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE SET DEFAULT
 );
-INSERT INTO state (job_id, theme) VALUES (1, 'light');
+INSERT INTO state (job_id, clocked_in, theme) VALUES (1, 0, 'light');
 "#;

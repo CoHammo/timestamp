@@ -23,6 +23,6 @@
         {@render children()}
     </div>
     <form method="dialog" class="modal-backdrop">
-        <button>close</button>
+        <button class="cursor-default">close</button>
     </form>
 </dialog>

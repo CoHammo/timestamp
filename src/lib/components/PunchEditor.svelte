@@ -21,14 +21,14 @@
 
 <Modal bind:this={modal}>
     <div class="flex flex-col gap-2 p-2">
-        <h2 class="font-bold text-center px-8 my-1 text-[1.2rem]">
+        <h2 class="font-bold text-center px-8 mb-1 mt-2 text-[1.3rem]">
             {punch?.start.toLocaleDateString([], { weekday: "long" })},
             {punch?.start.toLocaleDateString([], {
                 month: "long",
                 day: "numeric",
             })}
         </h2>
-        <div class="flex gap-2 text-center text-[1.1rem]">
+        <div class="flex flex-wrap gap-2 text-center text-[1.06rem]">
             <div class="flex flex-col bg-slate-300/80 rounded p-2 flex-1">
                 <span>
                     {punch?.start.toLocaleDateString([])}
@@ -71,16 +71,19 @@
                 {punch?.dDelta.seconds}s
             </div>
         {/if}
-        <textarea
-            name="notes"
-            id="notebox"
-            rows="4"
-            value={punch?.notes}
-            placeholder="Notes here..."
-            class="bg-slate-100 p-2 rounded focus:bg-slate-200 focus:outline-none transition-all duration-300"
-        ></textarea>
-        <button class="flex gap-1 p-1 my-1 hover:cursor-pointer">
-            <div>
+        <div class="flex flex-col">
+            <label for="notes" class="text-[1.1rem] mb-0.5">Notes</label>
+            <textarea
+                name="notes"
+                id="notebox"
+                rows="4"
+                value={punch?.notes}
+                placeholder="Notes here..."
+                class="bg-slate-200/60 p-2 rounded focus:bg-slate-300/60 focus:outline-none transition-all duration-300"
+            ></textarea>
+        </div>
+        <button class="flex gap-1 p-1 my-2 hover:cursor-pointer">
+            <div class="mr-1">
                 <Tags size={22} color="blue" />
             </div>
             <div class="flex flex-wrap">
@@ -88,7 +91,7 @@
                     <TagCard {tag} />
                 {/each}
                 {#if punch?.tags == undefined}
-                    <span class="text-gray-600">No Tags...</span>
+                    <span class="text-gray-600">Tags</span>
                 {/if}
             </div>
         </button>
