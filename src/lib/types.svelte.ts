@@ -4,12 +4,14 @@ export type JobType = {
 };
 
 export class Job {
-  id: number = 0;
-  name: string = "Job";
+  id: number = -1;
+  name: string = "No Job";
 
-  fromType(job: JobType) {
-    this.id = job.id;
-    this.name = job.name;
+  static fromType(j: JobType) {
+    let job = new Job();
+    job.id = j.id;
+    job.name = j.name;
+    return job;
   }
 }
 
@@ -18,7 +20,7 @@ export type PunchType = {
   job_id: number;
   start: string;
   end: string | undefined;
-  delta: number;
+  delta_ms: number;
   tags: string[] | undefined;
   notes: string | undefined;
 };
@@ -28,12 +30,12 @@ export class Punch {
   job_id: number;
   start: Date;
   end: Date | undefined;
-  #delta: number = 0;
+  delta_ms: number = 0;
   get delta() {
-    return this.#delta;
+    return this.delta_ms;
   }
-  set delta(d: number) {
-    this.#delta = d;
+  set delta(value: number) {
+    this.delta_ms = value;
     this.formatDelta();
   }
   dDelta: {
@@ -41,7 +43,7 @@ export class Punch {
     minutes: number;
     seconds: number;
     str: string;
-  } = { hours: 0, minutes: 0, seconds: 0, str: "00:00:00" };
+  } = $state({ hours: 0, minutes: 0, seconds: 0, str: "00:00:00" });
   tags: string[] | undefined;
   notes: string | undefined;
   #intervalId: number | undefined;
@@ -58,14 +60,14 @@ export class Punch {
     let punch = new Punch(p.job_id, new Date(p.start));
     punch.id = p.id;
     punch.end = p.end ? new Date(p.end) : undefined;
-    punch.delta = p.delta;
+    punch.delta = p.delta_ms;
     punch.tags = p.tags;
     punch.notes = p.notes;
     punch.setTimer();
     return punch;
   }
 
-  copy(): Punch {
+  clone(): Punch {
     let punch = new Punch(this.job_id, new Date(this.start));
     punch.id = this.id;
     punch.end = this.end != undefined ? new Date(this.end) : undefined;
@@ -111,7 +113,22 @@ export class Punch {
   }
 }
 
-export type State = {
-  job: Job;
+export type StateType = {
+  job: JobType;
+  clocked_in: boolean;
   theme: string;
 };
+
+export class State {
+  job: Job = new Job();
+  clocked_in: boolean = false;
+  theme: string = "no theme";
+
+  static fromType(s: StateType) {
+    let state = new State();
+    state.job = Job.fromType(s.job);
+    state.clocked_in = s.clocked_in;
+    state.theme = s.theme;
+    return state;
+  }
+}

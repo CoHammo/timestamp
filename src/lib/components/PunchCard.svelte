@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { onMount } from "svelte";
     import { TagCard, PunchEditor } from "./index";
     import { Punch } from "../types.svelte";
     import Tags from "@lucide/svelte/icons/tags";
@@ -13,7 +12,7 @@
     class="flex flex-col {punch.end == undefined
         ? 'bg-blue-200'
         : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer focus:outline-none"
-    onclick={() => editor?.open(punch)}
+    onclick={() => editor?.open(punch.clone())}
 >
     <!-- Data -->
     <div class="flex items-center justify-between">

@@ -1,17 +1,13 @@
 mod app_error;
-mod seed_sql;
+mod tests;
 mod types;
 
 use app_error::AppError;
 use chrono::{DateTime, TimeDelta, Utc};
-use seed_sql::SEED_BATCH;
-use std::sync::OnceLock;
 use tauri::async_runtime::block_on;
-use tokio::sync::Mutex;
-use turso::{Builder, Connection, IntoParams, Rows};
+use tauri::{Manager, State};
+use turso::{Builder, Connection};
 use types::*;
-
-pub static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 pub fn parse_utc(s: Option<String>) -> Result<Option<DateTime<Utc>>, AppError> {
     if let Some(s) = s {
@@ -22,233 +18,117 @@ pub fn parse_utc(s: Option<String>) -> Result<Option<DateTime<Utc>>, AppError> {
     }
 }
 
-async fn init_db() -> Result<(), AppError> {
+async fn init_db() -> Result<Connection, AppError> {
     let db = Builder::new_local(":memory:").build().await?;
     let conn = db.connect()?;
-    conn.execute_batch(SEED_BATCH).await?;
-    DB.set(Mutex::new(conn))
-        .or(Err("Database mutex already initialized"))?;
-    add_job("Christian Challenge".to_string()).await?;
-    add_tag("Discipleship".to_string()).await?;
-    add_punch(Punch {
-        id: 0,
-        job_id: 1,
-        start: (Utc::now() - TimeDelta::milliseconds(3200048)),
-        end: Some(Utc::now()),
-        delta: 0,
-        tags: Some(vec!["Discipleship".to_string()]),
-        notes: Some("Met with John".to_string()),
-    })
-    .await?;
-    clock_in(1, None).await?;
-    Ok(())
+    let sql = vec![Job::TABLE, Punch::TABLE, Tag::TABLE, AppState::TABLE].concat();
+    conn.execute_batch(sql).await?;
+    Ok(conn)
 }
 
-async fn execute_db(statement: &str, params: impl IntoParams) -> Result<u64, AppError> {
-    if let Some(c) = DB.get() {
-        let conn = c.lock().await;
-        let rows_affected = conn.execute(statement, params).await?;
-        Ok(rows_affected)
-    } else {
-        Err("Database not initialized")?
-    }
-}
-
-async fn query_db(statement: &str, params: impl IntoParams) -> Result<Rows, AppError> {
-    if let Some(c) = DB.get() {
-        let conn = c.lock().await;
-        let rows = conn.query(statement, params).await?;
-        Ok(rows)
-    } else {
-        Err("Database not initialized")?
-    }
-}
-
-// async fn seed_db() -> Result<(), AppError> {
-//     {
-//         let conn = get_db().await?;
-//         conn.execute_batch(SEED_BATCH).await?;
-//     }
-//     add_job("Christian Challenge".to_string()).await?;
-//     add_tag("Discipleship".to_string()).await?;
-//     add_punch(Punch {
-//         id: 0,
-//         job_id: 1,
-//         start: (Utc::now() - TimeDelta::milliseconds(3200048)),
-//         end: Some(Utc::now()),
-//         delta: 0,
-//         tags: Some(vec!["Discipleship".to_string()]),
-//         notes: Some("Met with John".to_string()),
-//     })
-//     .await?;
-//     clock_in(1, None).await?;
-//     Ok(())
-// }
-
-#[tauri::command]
-async fn get_state() -> Result<AppState, AppError> {
-    let state = AppState::from_rows(query_db(AppState::sql_get(), ()).await?).await?;
-    Ok(state)
-}
-
-#[tauri::command]
-async fn update_state(state: AppState) -> Result<(), AppError> {
-    execute_db(
-        "UPDATE state SET job_id = ?1, theme = ?2",
-        (state.job.id, state.theme),
+async fn seed_db(conn: &Connection) -> Result<(), AppError> {
+    Job::add(conn, String::from("Christian Challenge")).await?;
+    Tag::add(conn, String::from("Discipleship")).await?;
+    Punch::add(
+        conn,
+        Punch {
+            id: 0,
+            job_id: 1,
+            start: (Utc::now() - TimeDelta::milliseconds(3200048)),
+            end: Some(Utc::now()),
+            delta_ms: 0,
+            tags: Some(vec![String::from("Discipleship")]),
+            notes: Some(String::from("Met with John")),
+        },
     )
     .await?;
+    Punch::clock_in(conn, 1, None).await?;
     Ok(())
 }
 
 #[tauri::command]
-async fn get_jobs() -> Result<Vec<Job>, AppError> {
-    let jobs = Job::from_rows(query_db("SELECT * FROM jobs", ()).await?).await?;
-    Ok(jobs)
+async fn get_start_data(
+    conn: State<'_, Connection>,
+) -> Result<(AppState, Vec<Job>, Vec<Punch>), AppError> {
+    let state = AppState::get(&conn).await?;
+    let jobs = Job::get_all(&conn).await?;
+    let punches = Punch::get_for_job(&conn, state.job.id).await?;
+    Ok((state, jobs, punches))
 }
 
 #[tauri::command]
-async fn add_job(name: String) -> Result<(), AppError> {
-    execute_db("INSERT INTO jobs (name) VALUES (?1)", [name]).await?;
-    Ok(())
+async fn get_state(conn: State<'_, Connection>) -> Result<AppState, AppError> {
+    AppState::get(&conn).await
 }
 
 #[tauri::command]
-async fn edit_job(job: Job) -> Result<(), AppError> {
-    execute_db(
-        "UPDATE jobs SET name = ?1 WHERE id = ?2",
-        (job.name, job.id),
-    )
-    .await?;
-    Ok(())
+async fn update_state(conn: State<'_, Connection>, app_state: AppState) -> Result<(), AppError> {
+    AppState::update(&conn, app_state).await
 }
 
 #[tauri::command]
-async fn get_punches(job_id: u64) -> Result<Vec<Punch>, AppError> {
-    let punches = Punch::from_rows(
-        query_db(
-            "SELECT * FROM punches WHERE job_id = ?1 ORDER BY start DESC",
-            [job_id],
-        )
-        .await?,
-    )
-    .await?;
-    Ok(punches)
+async fn get_jobs(conn: State<'_, Connection>) -> Result<Vec<Job>, AppError> {
+    Job::get_all(&conn).await
 }
 
 #[tauri::command]
-async fn add_punch(punch: Punch) -> Result<u64, AppError> {
-    let delta: u64 = (punch.end.unwrap() - punch.start)
-        .num_milliseconds()
-        .try_into()?;
-    let mut rows = query_db(
-        r#"
-        INSERT INTO punches (job_id, start, end, delta, tags, notes)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        RETURNING id
-        "#,
-        (
-            punch.job_id,
-            punch.start.to_string(),
-            punch.end.map(|e| e.to_string()),
-            delta,
-            punch.tags.map(|s| s.join(",")),
-            punch.notes,
-        ),
-    )
-    .await?;
-    let mut id: u64 = 0;
-    if let Some(row) = rows.next().await? {
-        id = row.get(0)?;
-    }
-    Ok(id)
+async fn add_job(conn: State<'_, Connection>, name: String) -> Result<(), AppError> {
+    Job::add(&conn, name).await
 }
 
 #[tauri::command]
-async fn edit_punch(punch: Punch) -> Result<(), AppError> {
-    let delta: u64 = (punch.end.unwrap() - punch.start)
-        .num_milliseconds()
-        .try_into()?;
-    execute_db(
-        r#"
-        UPDATE punches
-        SET start = ?2,
-            end = ?3,
-            delta = ?4,
-            tags = ?5,
-            notes = ?6
-        WHERE id = ?1
-        "#,
-        (
-            punch.id,
-            punch.start.to_string(),
-            punch.end.map(|e| e.to_string()),
-            delta,
-            punch.tags.map(|s| s.join(",")),
-            punch.notes,
-        ),
-    )
-    .await?;
-    Ok(())
+async fn edit_job(conn: State<'_, Connection>, job: Job) -> Result<(), AppError> {
+    Job::update(&conn, job).await
 }
 
 #[tauri::command]
-async fn clock_in(job_id: u64, tags: Option<Vec<String>>) -> Result<Punch, AppError> {
-    let start = Utc::now();
-    let rows = query_db(
-        r#"
-            INSERT INTO punches (job_id, start, tags) VALUES (?1, ?2, ?3)
-            RETURNING *;
-            "#,
-        (job_id, start.to_string(), tags.map(|s| s.join(","))),
-    )
-    .await?;
-    let punch = Punch::from_rows(rows).await?.pop().unwrap();
-    Ok(punch)
+async fn get_punches(conn: State<'_, Connection>, job_id: u64) -> Result<Vec<Punch>, AppError> {
+    Punch::get_for_job(&conn, job_id).await
 }
 
 #[tauri::command]
-async fn clock_out(job_id: u64) -> Result<Punch, AppError> {
-    let end = Utc::now();
-    let rows = query_db(
-        "SELECT * FROM punches WHERE job_id = ?1 AND end IS NULL LIMIT 1",
-        [job_id],
-    )
-    .await?;
-    let punch_opt = Punch::from_rows(rows).await?.pop();
-    if let Some(mut punch) = punch_opt {
-        let delta: u64 = (end - punch.start).num_milliseconds().try_into()?;
-        execute_db(
-            "UPDATE punches SET end = ?2, delta = ?3 WHERE id = ?1",
-            (punch.id, end.to_string(), delta),
-        )
-        .await?;
-        punch.end = Some(end);
-        punch.delta = delta;
-        Ok(punch)
-    } else {
-        Err("Not clocked in")?
-    }
+async fn add_punch(conn: State<'_, Connection>, punch: Punch) -> Result<u64, AppError> {
+    Punch::add(&conn, punch).await
 }
 
 #[tauri::command]
-async fn get_tags() -> Result<Vec<Tag>, AppError> {
-    let tags = Tag::from_rows(query_db("SELECT * FROM tags", ()).await?).await?;
-    Ok(tags)
+async fn edit_punch(conn: State<'_, Connection>, punch: Punch) -> Result<(), AppError> {
+    Punch::update(&conn, punch).await
 }
 
 #[tauri::command]
-async fn add_tag(name: String) -> Result<(), AppError> {
-    execute_db("INSERT INTO tags (name) VALUES (?1)", [name]).await?;
-    Ok(())
+async fn clock_in(
+    conn: State<'_, Connection>,
+    job_id: u64,
+    tags: Option<Vec<String>>,
+) -> Result<Punch, AppError> {
+    Punch::clock_in(&conn, job_id, tags).await
+}
+
+#[tauri::command]
+async fn clock_out(conn: State<'_, Connection>, job_id: u64) -> Result<Punch, AppError> {
+    Punch::clock_out(&conn, job_id).await
+}
+
+#[tauri::command]
+async fn get_tags(conn: State<'_, Connection>) -> Result<Vec<Tag>, AppError> {
+    Tag::get_all(&conn).await
+}
+
+#[tauri::command]
+async fn add_tag(conn: State<'_, Connection>, name: String) -> Result<(), AppError> {
+    Tag::add(&conn, name).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .setup(|_| {
+        .setup(|app| {
             if let Err(e) = block_on(async {
-                init_db().await?;
+                let conn = init_db().await?;
+                seed_db(&conn).await?;
+                println!("Database Initialized");
+                app.manage(conn);
                 Ok::<(), AppError>(())
             }) {
                 eprintln!("{}", e.0);
@@ -258,6 +138,7 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            get_start_data,
             get_state,
             update_state,
             get_jobs,

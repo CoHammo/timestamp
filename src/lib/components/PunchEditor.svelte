@@ -2,8 +2,7 @@
     import Tags from "@lucide/svelte/icons/tags";
     import { Modal, TagCard } from "./index";
     import { Punch } from "../types.svelte";
-    import { invoke } from "@tauri-apps/api/core";
-    import { addOrEditPunch } from "$lib/state_commands.svelte";
+    import { updatePunch, addPunch } from "$lib/commands";
 
     let modal: Modal | undefined = $state();
     let punch: Punch | undefined = $state();
@@ -97,7 +96,15 @@
         </button>
         <button
             class="btn outline-none border-none bg-blue-600 rounded text-lg text-white h-8 m-0"
-            onclick={async () => await addOrEditPunch(punch!)}
+            onclick={async () => {
+                if (punch) {
+                    if (punch.id == 0) {
+                        await addPunch(punch);
+                    } else {
+                        await updatePunch(punch);
+                    }
+                }
+            }}
         >
             Save
         </button>

@@ -5,7 +5,6 @@
         jobs,
         punches,
         appState,
-        clockedIn,
         init,
         toggleClockIn,
     } from "$lib/state_commands.svelte";
@@ -72,12 +71,12 @@
         </button>
 
         <button
-            class="btn border-none flex-1 {clockedIn()
+            class="btn border-none flex-1 {appState.state?.clocked_in
                 ? 'bg-red-500'
                 : 'bg-green-600'} rounded-md text-white text-[1rem]/4 text-nowrap"
             onclick={async () => await toggleClockIn()}
         >
-            {#if clockedIn()}
+            {#if appState.state?.clocked_in}
                 <div>
                     <Stop fill="white" size={22} />
                 </div>
