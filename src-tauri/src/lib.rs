@@ -3,20 +3,20 @@ mod tests;
 mod types;
 
 use app_error::AppError;
-use chrono::{DateTime, TimeDelta, Utc};
+// use chrono::{DateTime, TimeDelta, Utc};
 use tauri::async_runtime::block_on;
 use tauri::{Manager, State};
 use turso::{Builder, Connection};
 use types::*;
 
-pub fn parse_utc(s: Option<String>) -> Result<Option<DateTime<Utc>>, AppError> {
-    if let Some(s) = s {
-        let dt: DateTime<Utc> = s.parse()?;
-        Ok(Some(dt))
-    } else {
-        Ok(None)
-    }
-}
+// pub fn parse_utc(s: Option<String>) -> Result<Option<DateTime<Utc>>, AppError> {
+//     if let Some(s) = s {
+//         let dt: DateTime<Utc> = s.parse()?;
+//         Ok(Some(dt))
+//     } else {
+//         Ok(None)
+//     }
+// }
 
 async fn init_db() -> Result<Connection, AppError> {
     let db = Builder::new_local(":memory:").build().await?;
@@ -34,9 +34,9 @@ async fn seed_db(conn: &Connection) -> Result<(), AppError> {
         Punch {
             id: 0,
             job_id: 1,
-            start: (Utc::now() - TimeDelta::milliseconds(3200048)),
-            end: Some(Utc::now()),
-            delta_ms: 0,
+            start: String::from("2026-04-20T08:00:00.000Z"),
+            end: Some(String::from("2026-04-20T12:00:00.000Z")),
+            delta_sec: 0,
             tags: Some(vec![String::from("Discipleship")]),
             notes: Some(String::from("Met with John")),
         },
@@ -92,7 +92,7 @@ async fn add_punch(conn: State<'_, Connection>, punch: Punch) -> Result<u64, App
 }
 
 #[tauri::command]
-async fn edit_punch(conn: State<'_, Connection>, punch: Punch) -> Result<(), AppError> {
+async fn update_punch(conn: State<'_, Connection>, punch: Punch) -> Result<(), AppError> {
     Punch::update(&conn, punch).await
 }
 
@@ -146,7 +146,7 @@ pub fn run() {
             edit_job,
             get_punches,
             add_punch,
-            edit_punch,
+            update_punch,
             clock_in,
             clock_out,
             get_tags,

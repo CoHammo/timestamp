@@ -41,20 +41,25 @@ export async function getPunches(jobId: number) {
   });
 }
 
-export async function toggleClockIn() {
+export async function clockIn() {
   tryRun(async () => {
-    if (appState.state?.clocked_in) {
-      let pt: PunchType = await invoke("clock_out", {
-        jobId: appState.state?.job.id,
-      });
-      punches.list[0].clearTimer();
-      punches.list[0] = Punch.fromType(pt);
-    } else {
-      let pt: PunchType = await invoke("clock_in", {
-        jobId: appState.state?.job.id,
-      });
-      punches.list.splice(0, 0, Punch.fromType(pt));
-    }
+    let pt: PunchType = await invoke("clock_in", {
+      jobId: appState.state?.job.id,
+    });
+    punches.list.push(Punch.fromType(pt));
+    await getState();
+  });
+}
+
+export async function clockOut() {
+  tryRun(async () => {
+    let pt: PunchType = await invoke("clock_out", {
+      jobId: appState.state?.job.id,
+    });
+    punches.list[punches.list.length - 1].clearTimer();
+    let p = Punch.fromType(pt);
+    punches.list[punches.list.length - 1] = p;
+    await getState();
   });
 }
 
@@ -62,17 +67,15 @@ export async function addPunch(punch: Punch) {
   tryRun(async () => {
     let id: number = await invoke("add_punch", { punch });
     punch.id = id;
-    punches.list.splice(0, 0, punch);
+    punches.list.push(punch);
   });
+  await getState();
 }
 
-export async function updatePunch(punch: Punch) {
+export async function updatePunch(punch: Punch, listIndex: number) {
   tryRun(async () => {
-    let pt: PunchType = await invoke("edit_punch", { punch });
-    punches.list.splice(
-      punches.list.findIndex((p) => p.id === punch.id),
-      1,
-      Punch.fromType(pt),
-    );
+    await invoke("update_punch", { punch });
+    punches.list[listIndex] = punch;
+    await getState();
   });
 }

@@ -1,13 +1,8 @@
 <script lang="ts">
     import { PunchCard, PunchEditor } from "$lib/components";
-    import { type PunchType, Punch } from "$lib/types.svelte";
-    import {
-        jobs,
-        punches,
-        appState,
-        init,
-        toggleClockIn,
-    } from "$lib/state_commands.svelte";
+    import { Punch } from "$lib/types.svelte";
+    import { init, clockIn, clockOut } from "$lib/commands";
+    import { appState, punches } from "$lib/state.svelte";
     import { onMount } from "svelte";
     import Menu from "@lucide/svelte/icons/menu";
     import Settings from "@lucide/svelte/icons/settings";
@@ -52,8 +47,10 @@
 
     <!-- List of Punches for the Current Job -->
     <div class="flex flex-col gap-2 p-2 overflow-y-auto">
-        {#each punches.list as punch (punch.id)}
-            <PunchCard {punch} />
+        {#each { length: punches.list.length } as _, index}
+            {@const i = punches.list.length - 1 - index}
+            {@const punch = punches.list[i]}
+            <PunchCard {punch} listIndex={i} />
         {/each}
     </div>
 
@@ -62,7 +59,7 @@
         <button
             class="btn flex-1 bg-blue-600 text-white text-[1rem]/4 text-nowrap border-none rounded-md gap-2 focus:border-none focus:outline-none"
             onclick={() =>
-                newPuncher?.open(new Punch(appState.state?.job.id ?? 0))}
+                newPuncher?.open(new Punch(appState.state!.job.id), -1)}
         >
             <div>
                 <AddClock size={22} />
@@ -74,7 +71,13 @@
             class="btn border-none flex-1 {appState.state?.clocked_in
                 ? 'bg-red-500'
                 : 'bg-green-600'} rounded-md text-white text-[1rem]/4 text-nowrap"
-            onclick={async () => await toggleClockIn()}
+            onclick={async () => {
+                if (appState.state?.clocked_in) {
+                    await clockOut();
+                } else {
+                    await clockIn();
+                }
+            }}
         >
             {#if appState.state?.clocked_in}
                 <div>

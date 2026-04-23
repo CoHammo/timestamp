@@ -1,5 +1,5 @@
-use crate::{app_error::AppError, parse_utc};
-use chrono::{DateTime, Utc};
+use crate::app_error::AppError;
+// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use turso::{Connection, Row, Rows};
 
@@ -76,7 +76,7 @@ impl Job {
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL
     );
-    INSERT INTO jobs (name) VALUES ('Job');
+    INSERT OR IGNORE INTO jobs (name) VALUES ('Job');
     "#;
 
     pub async fn get_all(conn: &Connection) -> Result<Vec<Job>, AppError> {
@@ -119,9 +119,9 @@ impl Job {
 pub struct Punch {
     pub id: u64,
     pub job_id: u64,
-    pub start: DateTime<Utc>,
-    pub end: Option<DateTime<Utc>>,
-    pub delta_ms: i64,
+    pub start: String,
+    pub end: Option<String>,
+    pub delta_sec: i64,
     pub tags: Option<Vec<String>>,
     pub notes: Option<String>,
 }
@@ -133,17 +133,29 @@ impl Punch {
         job_id INTEGER NOT NULL,
         start TEXT NOT NULL,
         end TEXT,
-        delta_ms INTEGER NOT NULL DEFAULT 0,
+        delta_sec INTEGER NOT NULL DEFAULT 0,
         tags TEXT,
         notes TEXT,
         FOREIGN KEY(job_id) REFERENCES jobs(id)
     );
     "#;
 
+    pub fn new() -> Self {
+        Self {
+            id: 0,
+            job_id: 0,
+            start: String::new(),
+            end: None,
+            delta_sec: 0,
+            tags: None,
+            notes: None,
+        }
+    }
+
     pub async fn get_for_job(conn: &Connection, job_id: u64) -> Result<Vec<Punch>, AppError> {
         let punches = Punch::from_rows(
             conn.query(
-                "SELECT * FROM punches WHERE job_id = ?1 ORDER BY start DESC",
+                "SELECT * FROM punches WHERE job_id = ?1 ORDER BY start ASC",
                 [job_id],
             )
             .await?,
@@ -153,21 +165,17 @@ impl Punch {
     }
 
     pub async fn add(conn: &Connection, punch: Punch) -> Result<u64, AppError> {
-        let delta: u64 = (punch.end.unwrap() - punch.start)
-            .num_milliseconds()
-            .try_into()?;
         let mut rows = conn
             .query(
                 r#"
-            INSERT INTO punches (job_id, start, end, delta_ms, tags, notes)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            INSERT INTO punches (job_id, start, end, delta_sec, tags, notes)
+            VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', ?2), strftime('%Y-%m-%dT%H:%M:%SZ', ?3), unixepoch(?3) - unixepoch(?2), ?4, ?5)
             RETURNING id
             "#,
                 (
                     punch.job_id,
-                    punch.start.to_string(),
-                    punch.end.map(|e| e.to_string()),
-                    delta,
+                    punch.start,
+                    punch.end,
                     punch.tags.map(|s| s.join(",")),
                     punch.notes,
                 ),
@@ -181,27 +189,24 @@ impl Punch {
     }
 
     pub async fn update(conn: &Connection, punch: Punch) -> Result<(), AppError> {
-        let mut delta: i64 = 0;
-        if let Some(end) = punch.end {
-            delta = (end - punch.start).num_milliseconds();
-        }
         conn.execute(
             r#"
             UPDATE punches
-            SET start = ?2,
-                end = ?3,
-                delta_ms = ?4,
-                tags = ?5,
-                notes = ?6
-            WHERE id = ?1
+            SET job_id = ?1,
+                start = strftime('%Y-%m-%dT%H:%M:%SZ', ?2),
+                end = strftime('%Y-%m-%dT%H:%M:%SZ', ?3),
+                delta_sec = unixepoch(?3) - unixepoch(?2),
+                tags = ?4,
+                notes = ?5
+            WHERE id = ?6
             "#,
             (
-                punch.id,
-                punch.start.to_string(),
-                punch.end.map(|e| e.to_string()),
-                delta,
+                punch.job_id,
+                punch.start,
+                punch.end,
                 punch.tags.map(|s| s.join(",")),
                 punch.notes,
+                punch.id,
             ),
         )
         .await?;
@@ -213,41 +218,42 @@ impl Punch {
         job_id: u64,
         tags: Option<Vec<String>>,
     ) -> Result<Punch, AppError> {
-        let start = Utc::now();
-        let rows = conn
+        let mut rows = conn
             .query(
                 r#"
-                INSERT INTO punches (job_id, start, tags) VALUES (?1, ?2, ?3)
+                INSERT INTO punches (job_id, start, tags)
+                SELECT ?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?2
+                WHERE NOT EXISTS (SELECT 1 FROM punches)
+                OR EXISTS (SELECT 1 FROM punches WHERE job_id = ?1 AND end IS NOT NULL LIMIT 1)
                 RETURNING *;
                 "#,
-                (job_id, start.to_string(), tags.map(|s| s.join(","))),
+                (job_id, tags.map(|s| s.join(","))),
             )
             .await?;
-        let punch = Punch::from_rows(rows).await?.pop().unwrap();
-        Ok(punch)
+        if let Some(row) = rows.next().await? {
+            Ok(Punch::from_row(&row)?)
+        } else {
+            Err("Already clocked in")?
+        }
     }
 
     pub async fn clock_out(conn: &Connection, job_id: u64) -> Result<Punch, AppError> {
-        let end = Utc::now();
-        let rows = conn
+        let mut rows = conn
             .query(
-                "SELECT * FROM punches WHERE job_id = ?1 AND end IS NULL LIMIT 1",
+                r#"
+            UPDATE punches
+            SET end = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                delta_sec = unixepoch('now') - unixepoch(punches.start)
+            WHERE job_id = ?1 AND end IS NULL
+            RETURNING *
+            LIMIT 1;"#,
                 [job_id],
             )
             .await?;
-        let punch_opt = Punch::from_rows(rows).await?.pop();
-        if let Some(mut punch) = punch_opt {
-            let delta: i64 = (end - punch.start).num_milliseconds();
-            conn.execute(
-                "UPDATE punches SET end = ?2, delta_ms = ?3 WHERE id = ?1",
-                (punch.id, end.to_string(), delta),
-            )
-            .await?;
-            punch.end = Some(end);
-            punch.delta_ms = delta;
-            Ok(punch)
+        if let Some(row) = rows.next().await? {
+            Ok(Punch::from_row(&row)?)
         } else {
-            Err("Not clocked in")?
+            Err("Tried to clock out when not clocked in")?
         }
     }
 
@@ -260,16 +266,15 @@ impl Punch {
     }
 
     pub fn from_row(row: &Row) -> Result<Punch, AppError> {
-        let tags: Option<Vec<String>> = row
-            .get::<Option<String>>(5)?
-            .map(|s| s.split(',').map(|s| s.to_string()).collect());
         Ok(Punch {
             id: row.get(0)?,
             job_id: row.get(1)?,
-            start: parse_utc(row.get(2)?)?.unwrap(),
-            end: parse_utc(row.get(3)?)?,
-            delta_ms: row.get(4)?,
-            tags: tags,
+            start: row.get(2)?,
+            end: row.get(3)?,
+            delta_sec: row.get(4)?,
+            tags: row
+                .get::<Option<String>>(5)?
+                .map(|s| s.split(',').map(|s| s.to_string()).collect()),
             notes: row.get(6)?,
         })
     }
@@ -285,7 +290,7 @@ impl Tag {
     CREATE TABLE IF NOT EXISTS tags (
         name TEXT PRIMARY KEY
     );
-    INSERT INTO tags (name) VALUES ('Office');
+    INSERT OR IGNORE INTO tags (name) VALUES ('Office');
     "#;
 
     pub async fn get_all(conn: &Connection) -> Result<Vec<Tag>, AppError> {

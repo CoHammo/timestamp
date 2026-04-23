@@ -14,11 +14,11 @@
   "license": "MIT",
   "dependencies": {
     "@lucide/svelte": "^1.8.0",
-    "@tailwindcss/vite": "^4.2.2",
+    "@tailwindcss/vite": "^4.2.4",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-log": "~2.8.0",
     "@tauri-apps/plugin-opener": "^2.5.3",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.10",

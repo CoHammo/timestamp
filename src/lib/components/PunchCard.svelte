@@ -3,7 +3,7 @@
     import { Punch } from "../types.svelte";
     import Tags from "@lucide/svelte/icons/tags";
 
-    let { punch }: { punch: Punch } = $props();
+    let { punch, listIndex }: { punch: Punch; listIndex: number } = $props();
 
     let editor: PunchEditor | undefined = $state();
 </script>
@@ -12,7 +12,7 @@
     class="flex flex-col {punch.end == undefined
         ? 'bg-blue-200'
         : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer focus:outline-none"
-    onclick={() => editor?.open(punch.clone())}
+    onclick={() => editor?.open(punch.clone(), listIndex)}
 >
     <!-- Data -->
     <div class="flex items-center justify-between">

@@ -20,7 +20,7 @@ export type PunchType = {
   job_id: number;
   start: string;
   end: string | undefined;
-  delta_ms: number;
+  delta_sec: number;
   tags: string[] | undefined;
   notes: string | undefined;
 };
@@ -30,12 +30,12 @@ export class Punch {
   job_id: number;
   start: Date;
   end: Date | undefined;
-  delta_ms: number = 0;
+  delta_sec: number = 0;
   get delta() {
-    return this.delta_ms;
+    return this.delta_sec;
   }
   set delta(value: number) {
-    this.delta_ms = value;
+    this.delta_sec = value;
     this.formatDelta();
   }
   dDelta: {
@@ -60,7 +60,7 @@ export class Punch {
     let punch = new Punch(p.job_id, new Date(p.start));
     punch.id = p.id;
     punch.end = p.end ? new Date(p.end) : undefined;
-    punch.delta = p.delta_ms;
+    punch.delta = p.delta_sec;
     punch.tags = p.tags;
     punch.notes = p.notes;
     punch.setTimer();
@@ -81,7 +81,7 @@ export class Punch {
   setTimer() {
     if (this.end == undefined && this.#intervalId === undefined) {
       this.#intervalId = setInterval(() => {
-        this.delta = Date.now() - this.start.getTime();
+        this.delta = Math.floor((Date.now() - this.start.getTime()) / 1000);
       }, 1000);
     }
   }
@@ -93,11 +93,11 @@ export class Punch {
 
   formatDelta() {
     // 1. Calculate total units
-    const totalSeconds = Math.floor(this.delta / 1000);
-    const totalMinutes = Math.floor(totalSeconds / 60);
+    // const totalSeconds = Math.floor(this.delta / 1000);
+    const totalMinutes = Math.floor(this.delta / 60);
 
     // 2. Extract remaining parts using the modulo operator (%)
-    const seconds = totalSeconds % 60;
+    const seconds = this.delta % 60;
     const minutes = totalMinutes % 60;
     const hours = Math.floor(totalMinutes / 60);
 

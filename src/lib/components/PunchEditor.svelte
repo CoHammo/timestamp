@@ -6,14 +6,17 @@
 
     let modal: Modal | undefined = $state();
     let punch: Punch | undefined = $state();
+    let index: number = $state(-1);
 
-    export function open(p: Punch) {
+    export function open(p: Punch, listIndex: number) {
         punch = p;
+        index = listIndex;
         modal?.open();
     }
 
     export function close() {
         punch = undefined;
+        index = -1;
         modal?.close();
     }
 </script>
@@ -101,7 +104,7 @@
                     if (punch.id == 0) {
                         await addPunch(punch);
                     } else {
-                        await updatePunch(punch);
+                        await updatePunch(punch, index);
                     }
                 }
             }}
