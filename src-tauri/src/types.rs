@@ -1,12 +1,21 @@
 use crate::app_error::AppError;
-// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tokio::sync::{Mutex, MutexGuard};
 use turso::{Connection, Row, Rows};
+
+pub struct Db {
+    pub conn: Mutex<Connection>,
+}
+
+impl Db {
+    pub async fn conn(&self) -> MutexGuard<'_, Connection> {
+        self.conn.lock().await
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppState {
     pub job: Job,
-    pub clocked_in: bool,
     pub theme: String,
 }
 
@@ -21,7 +30,8 @@ impl AppState {
     INSERT OR IGNORE INTO state (id, job_id, theme) VALUES (1, 1, 'light');
     "#;
 
-    pub async fn get(conn: &Connection) -> Result<AppState, AppError> {
+    pub async fn get(db: &Db) -> Result<AppState, AppError> {
+        let conn = db.conn().await;
         let rows = conn
             .query(
                 r#"
@@ -42,20 +52,29 @@ impl AppState {
         Ok(state)
     }
 
-    pub async fn update(conn: &Connection, state: AppState) -> Result<(), AppError> {
-        conn.execute(
-            "UPDATE state SET job_id = ?1, theme = ?2",
-            (state.job.id, state.theme),
-        )
-        .await?;
-        Ok(())
+    // pub async fn update(db: &Db, state: AppState) -> Result<(), AppError> {
+    //     let conn = db.conn().await;
+    //     conn.execute(
+    //         "UPDATE state SET job_id = ?1, theme = ?2",
+    //         (state.job.id, state.theme),
+    //     )
+    //     .await?;
+    //     Ok(())
+    // }
+
+    pub async fn change_job(db: &Db, job_id: u64) -> Result<AppState, AppError> {
+        db.conn()
+            .await
+            .execute("UPDATE state SET job_id = ?1", [job_id])
+            .await?;
+        let state = Self::get(db).await?;
+        Ok(state)
     }
 
     pub async fn from_rows(mut rows: Rows) -> Result<AppState, AppError> {
         if let Some(row) = rows.next().await? {
             Ok(AppState {
                 job: Job::from_row(&row, 0)?,
-                clocked_in: row.get::<u64>(2)? == 1,
                 theme: row.get(3)?,
             })
         } else {
@@ -68,6 +87,7 @@ impl AppState {
 pub struct Job {
     pub id: u64,
     pub name: String,
+    pub clocked_in: bool,
 }
 
 impl Job {
@@ -79,18 +99,35 @@ impl Job {
     INSERT OR IGNORE INTO jobs (name) VALUES ('Job');
     "#;
 
-    pub async fn get_all(conn: &Connection) -> Result<Vec<Job>, AppError> {
-        let jobs = Job::from_rows(conn.query("SELECT * FROM jobs;", ()).await?).await?;
+    pub async fn get_all(db: &Db) -> Result<Vec<Job>, AppError> {
+        let conn = db.conn().await;
+        let jobs = Job::from_rows(
+            conn.query(
+                r#"
+            SELECT
+                j.id,
+                j.name,
+                CASE WHEN p.id IS NOT NULL AND p.end IS NULL THEN 1 ELSE 0 END AS clocked_in
+            FROM jobs j
+            LEFT JOIN punches p ON j.id = p.job_id AND p.end IS NULL;
+            "#,
+                (),
+            )
+            .await?,
+        )
+        .await?;
         Ok(jobs)
     }
 
-    pub async fn add(conn: &Connection, name: String) -> Result<(), AppError> {
+    pub async fn add(db: &Db, name: String) -> Result<(), AppError> {
+        let conn = db.conn().await;
         conn.execute("INSERT into jobs (name) VALUES (?1)", [name])
             .await?;
         Ok(())
     }
 
-    pub async fn update(conn: &Connection, job: Job) -> Result<(), AppError> {
+    pub async fn update(db: &Db, job: Job) -> Result<(), AppError> {
+        let conn = db.conn().await;
         conn.execute(
             "UPDATE jobs SET name = ?1 WHERE id = ?2",
             (job.name, job.id),
@@ -111,6 +148,7 @@ impl Job {
         Ok(Job {
             id: row.get(col_start)?,
             name: row.get(col_start + 1)?,
+            clocked_in: row.get::<u64>(col_start + 2)? == 1,
         })
     }
 }
@@ -121,9 +159,9 @@ pub struct Punch {
     pub job_id: u64,
     pub start: String,
     pub end: Option<String>,
-    pub delta_sec: i64,
-    pub tags: Option<Vec<String>>,
-    pub notes: Option<String>,
+    pub delta_sec: u64,
+    pub tags: Vec<u64>,
+    pub notes: String,
 }
 
 impl Punch {
@@ -134,25 +172,41 @@ impl Punch {
         start TEXT NOT NULL,
         end TEXT,
         delta_sec INTEGER NOT NULL DEFAULT 0,
-        tags TEXT,
-        notes TEXT,
+        tags TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
         FOREIGN KEY(job_id) REFERENCES jobs(id)
     );
     "#;
 
-    pub fn new() -> Self {
-        Self {
-            id: 0,
-            job_id: 0,
-            start: String::new(),
-            end: None,
-            delta_sec: 0,
-            tags: None,
-            notes: None,
-        }
+    fn tags_string(tags: Vec<u64>) -> String {
+        let tgs = tags
+            .iter()
+            .map(|tag| tag.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        // let t = tags.map(|list| {
+        //     list.iter()
+        //         .map(|tag| tag.to_string())
+        //         .collect::<Vec<String>>()
+        //         .join(",")
+        // });
+        return tgs;
     }
 
-    pub async fn get_for_job(conn: &Connection, job_id: u64) -> Result<Vec<Punch>, AppError> {
+    // pub fn new() -> Self {
+    //     Self {
+    //         id: 0,
+    //         job_id: 0,
+    //         start: String::new(),
+    //         end: None,
+    //         delta_sec: 0,
+    //         tags: None,
+    //         notes: None,
+    //     }
+    // }
+
+    pub async fn get_for_job(db: &Db, job_id: u64) -> Result<Vec<Punch>, AppError> {
+        let conn = db.conn().await;
         let punches = Punch::from_rows(
             conn.query(
                 "SELECT * FROM punches WHERE job_id = ?1 ORDER BY start ASC",
@@ -164,19 +218,30 @@ impl Punch {
         Ok(punches)
     }
 
-    pub async fn add(conn: &Connection, punch: Punch) -> Result<u64, AppError> {
+    pub async fn add(db: &Db, punch: Punch) -> Result<u64, AppError> {
+        let conn = db.conn().await;
+        if punch.end.is_none() {
+            return Err(AppError(
+                "End time is required when adding a Punch".to_string(),
+            ));
+        }
         let mut rows = conn
             .query(
                 r#"
             INSERT INTO punches (job_id, start, end, delta_sec, tags, notes)
-            VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', ?2), strftime('%Y-%m-%dT%H:%M:%SZ', ?3), unixepoch(?3) - unixepoch(?2), ?4, ?5)
+            VALUES (?1,
+                strftime('%Y-%m-%dT%H:%M:%SZ', ?2),
+                strftime('%Y-%m-%dT%H:%M:%SZ', ?3),
+                unixepoch(?3) - unixepoch(?2),
+                ?4,
+                ?5)
             RETURNING id
             "#,
                 (
                     punch.job_id,
                     punch.start,
                     punch.end,
-                    punch.tags.map(|s| s.join(",")),
+                    Punch::tags_string(punch.tags),
                     punch.notes,
                 ),
             )
@@ -188,7 +253,8 @@ impl Punch {
         Ok(id)
     }
 
-    pub async fn update(conn: &Connection, punch: Punch) -> Result<(), AppError> {
+    pub async fn update(db: &Db, punch: Punch) -> Result<(), AppError> {
+        let conn = db.conn().await;
         conn.execute(
             r#"
             UPDATE punches
@@ -204,7 +270,7 @@ impl Punch {
                 punch.job_id,
                 punch.start,
                 punch.end,
-                punch.tags.map(|s| s.join(",")),
+                Punch::tags_string(punch.tags),
                 punch.notes,
                 punch.id,
             ),
@@ -213,21 +279,24 @@ impl Punch {
         Ok(())
     }
 
-    pub async fn clock_in(
-        conn: &Connection,
-        job_id: u64,
-        tags: Option<Vec<String>>,
-    ) -> Result<Punch, AppError> {
+    pub async fn clock_in(db: &Db, job_id: u64, tags: Vec<u64>) -> Result<Punch, AppError> {
+        let conn = db.conn().await;
         let mut rows = conn
             .query(
                 r#"
                 INSERT INTO punches (job_id, start, tags)
                 SELECT ?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?2
                 WHERE NOT EXISTS (SELECT 1 FROM punches)
-                OR EXISTS (SELECT 1 FROM punches WHERE job_id = ?1 AND end IS NOT NULL LIMIT 1)
+                OR NOT EXISTS (SELECT 1 FROM punches WHERE job_id = ?1 AND end IS NULL LIMIT 1)
                 RETURNING *;
                 "#,
-                (job_id, tags.map(|s| s.join(","))),
+                (
+                    job_id,
+                    tags.iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                ),
             )
             .await?;
         if let Some(row) = rows.next().await? {
@@ -237,7 +306,8 @@ impl Punch {
         }
     }
 
-    pub async fn clock_out(conn: &Connection, job_id: u64) -> Result<Punch, AppError> {
+    pub async fn clock_out(db: &Db, job_id: u64) -> Result<Punch, AppError> {
+        let conn = db.conn().await;
         let mut rows = conn
             .query(
                 r#"
@@ -266,15 +336,23 @@ impl Punch {
     }
 
     pub fn from_row(row: &Row) -> Result<Punch, AppError> {
+        let tag_str = row.get::<String>(5)?;
+        let tags: Vec<u64> = if tag_str.is_empty() {
+            Vec::new()
+        } else {
+            tag_str
+                .split(",")
+                .map(|s| s.parse::<u64>().unwrap_or(0))
+                .collect()
+        };
+
         Ok(Punch {
             id: row.get(0)?,
             job_id: row.get(1)?,
             start: row.get(2)?,
             end: row.get(3)?,
             delta_sec: row.get(4)?,
-            tags: row
-                .get::<Option<String>>(5)?
-                .map(|s| s.split(',').map(|s| s.to_string()).collect()),
+            tags,
             notes: row.get(6)?,
         })
     }
@@ -282,23 +360,27 @@ impl Punch {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tag {
+    pub id: u64,
     pub name: String,
 }
 
 impl Tag {
     pub const TABLE: &'static str = r#"
     CREATE TABLE IF NOT EXISTS tags (
-        name TEXT PRIMARY KEY
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL
     );
     INSERT OR IGNORE INTO tags (name) VALUES ('Office');
     "#;
 
-    pub async fn get_all(conn: &Connection) -> Result<Vec<Tag>, AppError> {
+    pub async fn get_all(db: &Db) -> Result<Vec<Tag>, AppError> {
+        let conn = db.conn().await;
         let tags = Self::from_rows(conn.query("SELECT * FROM tags;", ()).await?).await?;
         Ok(tags)
     }
 
-    pub async fn add(conn: &Connection, name: String) -> Result<(), AppError> {
+    pub async fn add(db: &Db, name: String) -> Result<(), AppError> {
+        let conn = db.conn().await;
         conn.execute("INSERT INTO tags (name) VALUES (?1)", [name])
             .await?;
         Ok(())
@@ -313,6 +395,9 @@ impl Tag {
     }
 
     pub fn from_row(row: &Row) -> Result<Tag, AppError> {
-        Ok(Tag { name: row.get(0)? })
+        Ok(Tag {
+            id: row.get(0)?,
+            name: row.get(1)?,
+        })
     }
 }

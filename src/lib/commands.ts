@@ -4,26 +4,37 @@ import {
   type PunchType,
   State,
   Punch,
-} from "./types.svelte";
-import { appState, jobs, punches } from "./state.svelte";
+  Tag,
+  type TagType,
+} from "./types";
+import { appState, jobs, punches, tags } from "./state.svelte";
 import { invoke } from "@tauri-apps/api/core";
 
-function tryRun(fn: () => Promise<void>) {
+function tryRun(fn: () => Promise<any>) {
   fn().catch((e) => console.log(e));
 }
 
 export async function init() {
   tryRun(async () => {
-    let start: [State, JobType[], PunchType[]] = await invoke("get_start_data");
-    appState.state = State.fromType(start[0]);
-    jobs.list = start[1].map((j) => Job.fromType(j));
-    punches.list = start[2].map((p) => Punch.fromType(p));
+    await getState();
+    await getJobs();
+    await getTags();
+    await changeJob(2);
   });
 }
 
 export async function getState() {
   tryRun(async () => {
-    appState.state = State.fromType(await invoke("get_state"));
+    let state: State = State.fromType(await invoke("get_state"));
+    appState.state = state;
+  });
+}
+
+export async function changeJob(jobId: number) {
+  tryRun(async () => {
+    let state: State = await invoke("change_job", { jobId });
+    appState.state = state;
+    await getPunches(state.job.id);
   });
 }
 
@@ -45,6 +56,7 @@ export async function clockIn() {
   tryRun(async () => {
     let pt: PunchType = await invoke("clock_in", {
       jobId: appState.state?.job.id,
+      tags: [],
     });
     punches.list.push(Punch.fromType(pt));
     await getState();
@@ -56,9 +68,9 @@ export async function clockOut() {
     let pt: PunchType = await invoke("clock_out", {
       jobId: appState.state?.job.id,
     });
-    punches.list[punches.list.length - 1].clearTimer();
-    let p = Punch.fromType(pt);
-    punches.list[punches.list.length - 1] = p;
+    let punch = Punch.fromType(pt);
+    let index = punches.list.findLastIndex((p) => p.id === punch.id);
+    punches.list[index] = punch;
     await getState();
   });
 }
@@ -68,8 +80,8 @@ export async function addPunch(punch: Punch) {
     let id: number = await invoke("add_punch", { punch });
     punch.id = id;
     punches.list.push(punch);
+    await getState();
   });
-  await getState();
 }
 
 export async function updatePunch(punch: Punch, listIndex: number) {
@@ -77,5 +89,15 @@ export async function updatePunch(punch: Punch, listIndex: number) {
     await invoke("update_punch", { punch });
     punches.list[listIndex] = punch;
     await getState();
+  });
+}
+
+export async function getTags() {
+  tryRun(async () => {
+    let tagTypes: TagType[] = await invoke("get_tags");
+    tags.map.clear();
+    for (const tag of tagTypes) {
+      tags.map.set(tag.id, Tag.fromType(tag));
+    }
   });
 }

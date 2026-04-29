@@ -1,4 +1,5 @@
 import { warn, debug, trace, info, error } from "@tauri-apps/plugin-log";
+import { PunchEditor } from "$lib/components";
 
 // Tauri doesn't have a Node.js server to do proper SSR
 // so we use adapter-static with a fallback to index.html to put the site in SPA mode

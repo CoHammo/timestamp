@@ -1,18 +1,36 @@
 <script lang="ts">
-    import { TagCard, PunchEditor } from "./index";
-    import { Punch } from "../types.svelte";
+    import { TagCard } from "./index";
+    import { Punch, type Delta } from "../types";
     import Tags from "@lucide/svelte/icons/tags";
+    import { getContext, untrack } from "svelte";
+    import { tags, timer } from "../state.svelte";
 
     let { punch, listIndex }: { punch: Punch; listIndex: number } = $props();
+    const editPunch: (punch: Punch, listIndex: number) => void =
+        getContext("editPunch");
 
-    let editor: PunchEditor | undefined = $state();
+    $effect(() => {
+        delta = punch.getDelta();
+        if (punch.end === undefined) {
+            let unsub = timer.subscribe(() => {
+                delta = punch.getDelta();
+            });
+            return () => unsub();
+        }
+    });
+    let delta: Delta = $state({
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        str: "00:00:00",
+    });
 </script>
 
 <button
     class="flex flex-col {punch.end == undefined
         ? 'bg-blue-200'
         : 'bg-slate-300/80'} rounded-md font-normal px-4 py-2 hover:cursor-pointer focus:outline-none"
-    onclick={() => editor?.open(punch.clone(), listIndex)}
+    onclick={() => editPunch(punch.clone(), listIndex)}
 >
     <!-- Data -->
     <div class="flex items-center justify-between">
@@ -35,37 +53,33 @@
 
         <!-- Duration of Punch Entry -->
         <div class="flex flex-col items-end">
-            {#if punch.dDelta.hours === 0 && punch.dDelta.minutes === 0}
+            {#if delta.hours === 0 && delta.minutes === 0}
                 <span class="text-[1.35rem] font-semibold"
-                    >{punch.dDelta.seconds}s</span
+                    >{delta.seconds}s</span
                 >
-            {:else if punch.dDelta.hours === 0 && punch.dDelta.minutes !== 0}
+            {:else if delta.hours === 0 && delta.minutes !== 0}
                 <span class="text-[1.35rem] font-semibold"
-                    >{punch.dDelta.minutes}m</span
+                    >{delta.minutes}m</span
                 >
-                <span class="text-[1rem] -mt-1">{punch.dDelta.seconds}s</span>
+                <span class="text-[1rem] -mt-1">{delta.seconds}s</span>
             {:else}
-                <span class="text-[1.35rem] font-semibold"
-                    >{punch.dDelta.hours}h</span
-                >
-                <span class="text-[1rem] -mt-1">{punch.dDelta.minutes}m</span>
+                <span class="text-[1.35rem] font-semibold">{delta.hours}h</span>
+                <span class="text-[1rem] -mt-1">{delta.minutes}m</span>
             {/if}
         </div>
     </div>
 
     <!-- Tags -->
-    {#if punch.tags != undefined}
+    {#if punch.tags.length > 0}
         <div class="flex items-center gap-2 mt-3 mb-1">
             <div>
-                <Tags size={20} color="blue" />
+                <Tags size={22} color="blue" />
             </div>
             <div class="flex overflow-x-auto gap-1">
                 {#each punch.tags as tag}
-                    <TagCard {tag} />
+                    <TagCard tag={tags.map.get(tag)} />
                 {/each}
             </div>
         </div>
     {/if}
 </button>
-
-<PunchEditor bind:this={editor} />

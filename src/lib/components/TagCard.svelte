@@ -1,11 +1,10 @@
 <script lang="ts">
-    let { tag }: { tag: string } = $props();
+    import { Tag } from "../types";
+    let { tag }: { tag: Tag | undefined } = $props();
 </script>
 
 <div class="bg-white rounded-md">
-    <div
-        class="bg-blue-600/50 rounded px-1.5 py-px font-semibold text-[0.9rem]"
-    >
-        {tag}
+    <div class="bg-blue-600/50 rounded px-1.5 py-px font-semibold text-[1rem]">
+        {tag?.name ?? "BAD TAG"}
     </div>
 </div>

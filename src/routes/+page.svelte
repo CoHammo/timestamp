@@ -1,20 +1,17 @@
 <script lang="ts">
-    import { PunchCard, PunchEditor } from "$lib/components";
-    import { Punch } from "$lib/types.svelte";
-    import { init, clockIn, clockOut } from "$lib/commands";
+    import { PunchCard } from "$lib/components";
+    import { Punch } from "$lib/types";
+    import { clockIn, clockOut } from "$lib/commands";
     import { appState, punches } from "$lib/state.svelte";
-    import { onMount } from "svelte";
+    import { getContext } from "svelte";
     import Menu from "@lucide/svelte/icons/menu";
     import Settings from "@lucide/svelte/icons/settings";
     import Play from "@lucide/svelte/icons/play";
     import Stop from "@lucide/svelte/icons/square";
     import AddClock from "@lucide/svelte/icons/clock-plus";
 
-    onMount(async () => {
-        await init();
-    });
-
-    let newPuncher: PunchEditor | undefined = $state();
+    const editPunch: (punch: Punch, listIndex: number) => void =
+        getContext("editPunch");
 </script>
 
 <main class="h-screen flex flex-col">
@@ -58,8 +55,7 @@
     <div class="flex flex-wrap mt-auto p-1.5 gap-1.5">
         <button
             class="btn flex-1 bg-blue-600 text-white text-[1rem]/4 text-nowrap border-none rounded-md gap-2 focus:border-none focus:outline-none"
-            onclick={() =>
-                newPuncher?.open(new Punch(appState.state!.job.id), -1)}
+            onclick={() => editPunch(new Punch(appState.state!.job.id), -1)}
         >
             <div>
                 <AddClock size={22} />
@@ -68,18 +64,18 @@
         </button>
 
         <button
-            class="btn border-none flex-1 {appState.state?.clocked_in
+            class="btn border-none flex-1 {appState.state?.job.clocked_in
                 ? 'bg-red-500'
                 : 'bg-green-600'} rounded-md text-white text-[1rem]/4 text-nowrap"
             onclick={async () => {
-                if (appState.state?.clocked_in) {
+                if (appState.state?.job.clocked_in) {
                     await clockOut();
                 } else {
                     await clockIn();
                 }
             }}
         >
-            {#if appState.state?.clocked_in}
+            {#if appState.state?.job.clocked_in}
                 <div>
                     <Stop fill="white" size={22} />
                 </div>
@@ -94,4 +90,4 @@
     </div>
 </main>
 
-<PunchEditor bind:this={newPuncher} />
+<!-- <div></div> -->
