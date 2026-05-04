@@ -63,6 +63,15 @@ export async function clockIn() {
   });
 }
 
+export async function reClockIn() {
+  tryRun(async () => {
+    await invoke("re_clock_in");
+    // punches.list[punches.list.length - 1].end = undefined;
+    await getPunches(appState.state?.job.id!);
+    await getState();
+  });
+}
+
 export async function clockOut() {
   tryRun(async () => {
     let pt: PunchType = await invoke("clock_out", {
@@ -87,7 +96,15 @@ export async function addPunch(punch: Punch) {
 export async function updatePunch(punch: Punch, listIndex: number) {
   tryRun(async () => {
     await invoke("update_punch", { punch });
-    punches.list[listIndex] = punch;
+    punches.list.splice(listIndex, 1, punch);
+    await getState();
+  });
+}
+
+export async function deletePunch(punchId: number, listIndex: number) {
+  tryRun(async () => {
+    await invoke("delete_punch", { punchId });
+    punches.list.splice(listIndex, 1);
     await getState();
   });
 }

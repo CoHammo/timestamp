@@ -33,7 +33,8 @@ async fn seed_db(db: &Db) -> Result<(), AppError> {
         },
     )
     .await?;
-    Punch::clock_in(db, 2, Vec::new()).await?;
+    AppState::change_job(db, 2).await?;
+    Punch::clock_in(db, Vec::new()).await?;
     Ok(())
 }
 
@@ -50,7 +51,6 @@ async fn change_job(db: State<'_, Db>, job_id: u64) -> Result<AppState, AppError
 #[tauri::command]
 async fn get_jobs(db: State<'_, Db>) -> Result<Vec<Job>, AppError> {
     let jobs = Job::get_all(&db).await?;
-    println!("{:?}", jobs);
     Ok(jobs)
 }
 
@@ -60,14 +60,13 @@ async fn add_job(db: State<'_, Db>, name: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-async fn edit_job(db: State<'_, Db>, job: Job) -> Result<(), AppError> {
+async fn update_job(db: State<'_, Db>, job: Job) -> Result<(), AppError> {
     Job::update(&db, job).await
 }
 
 #[tauri::command]
-async fn get_punches(db: State<'_, Db>, job_id: u64) -> Result<Vec<Punch>, AppError> {
-    let punches = Punch::get_for_job(&db, job_id).await?;
-    println!("{:?}", punches);
+async fn get_punches(db: State<'_, Db>) -> Result<Vec<Punch>, AppError> {
+    let punches = Punch::get_for_current_job(&db).await?;
     Ok(punches)
 }
 
@@ -82,13 +81,23 @@ async fn update_punch(db: State<'_, Db>, punch: Punch) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-async fn clock_in(db: State<'_, Db>, job_id: u64, tags: Vec<u64>) -> Result<Punch, AppError> {
-    Punch::clock_in(&db, job_id, tags).await
+async fn delete_punch(db: State<'_, Db>, punch_id: u64) -> Result<(), AppError> {
+    Punch::delete(&db, punch_id).await
 }
 
 #[tauri::command]
-async fn clock_out(db: State<'_, Db>, job_id: u64) -> Result<Punch, AppError> {
-    Punch::clock_out(&db, job_id).await
+async fn clock_in(db: State<'_, Db>, tags: Vec<u64>) -> Result<Punch, AppError> {
+    Punch::clock_in(&db, tags).await
+}
+
+#[tauri::command]
+async fn re_clock_in(db: State<'_, Db>) -> Result<(), AppError> {
+    Punch::re_clock_in(&db).await
+}
+
+#[tauri::command]
+async fn clock_out(db: State<'_, Db>) -> Result<Punch, AppError> {
+    Punch::clock_out(&db).await
 }
 
 #[tauri::command]
@@ -115,8 +124,10 @@ pub fn run() {
                 Ok::<(), AppError>(())
             }) {
                 eprintln!("{}", e.0);
+                Err("noooo".into())
+            } else {
+                Ok(())
             }
-            Ok(())
         })
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
@@ -125,11 +136,13 @@ pub fn run() {
             change_job,
             get_jobs,
             add_job,
-            edit_job,
+            update_job,
             get_punches,
             add_punch,
             update_punch,
+            delete_punch,
             clock_in,
+            re_clock_in,
             clock_out,
             get_tags,
             add_tag,

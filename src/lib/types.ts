@@ -87,6 +87,18 @@ export class Punch {
     return punch;
   }
 
+  equals(p: Punch): boolean {
+    return (
+      this.id === p.id &&
+      this.job_id === p.job_id &&
+      this.start.getTime() === p.start.getTime() &&
+      this.end?.getTime() === p.end?.getTime() &&
+      this.delta_sec === p.delta_sec &&
+      this.tags.toString() === p.tags.toString() &&
+      this.notes === p.notes
+    );
+  }
+
   getDelta(): Delta {
     // Calculate total units
     const totalSeconds = Math.floor(

@@ -1,11 +1,22 @@
 <script lang="ts">
     import Tags from "@lucide/svelte/icons/tags";
-    import { Modal, TagCard } from "./index";
+    import Square from "@lucide/svelte/icons/square";
+    import Play from "@lucide/svelte/icons/play";
+    import { TagCard } from "./index";
+    import {
+        updatePunch,
+        addPunch,
+        deletePunch,
+        clockOut,
+        clockIn,
+        reClockIn,
+    } from "$lib/commands";
+    import { Modal } from "./index";
     import { Punch, Tag, type Delta } from "../types";
-    import { updatePunch, addPunch } from "$lib/commands";
-    import { tags, timer } from "../state.svelte";
+    import { punches, tags, timer } from "../state.svelte";
 
     let modal: Modal | undefined = $state();
+    let orig: Punch | undefined = $state();
     let punch: Punch | undefined = $state();
     let tagged: Tag[] = $state([]);
     let availableTags: Tag[] = $state([]);
@@ -16,22 +27,12 @@
         seconds: 0,
         str: "00:00:00",
     });
-
-    function removeTag(index: number) {
-        availableTags.push(tagged[index]);
-        tagged.splice(index, 1);
-        punch?.tags.splice(index, 1);
-    }
-
-    function addTag(index: number) {
-        let tag = availableTags[index];
-        availableTags.splice(index, 1);
-        tagged.push(tag);
-        punch?.tags.push(tag.id);
-    }
+    let unsub: () => void | undefined;
+    let changed = $state(false);
 
     export function open(p: Punch, listIndex: number) {
-        punch = p;
+        orig = p;
+        punch = p.clone();
         delta = punch.getDelta();
         index = listIndex;
         tagged = punch.tags.map((id) => tags.map.get(id)!);
@@ -39,25 +40,75 @@
             .values()
             .filter((t) => !punch?.tags.includes(t.id))
             .toArray();
+        if (punch.end === undefined) {
+            unsub = timer.subscribe(() => {
+                delta = punch!.getDelta();
+            });
+        }
+        changed = !orig.equals(punch);
         modal?.open();
     }
 
-    export function close() {
-        punch = undefined;
-        index = -1;
-        delta = { hours: 0, minutes: 0, seconds: 0, str: "00:00:00" };
-        tagged = [];
-        availableTags = [];
+    export async function close() {
         modal?.close();
+        setTimeout(() => {
+            punch = undefined;
+            index = -1;
+            delta = { hours: 0, minutes: 0, seconds: 0, str: "00:00:00" };
+            tagged = [];
+            availableTags = [];
+            unsub?.();
+            changed = false;
+        }, 100);
+    }
+
+    function changeNotes(notes: string) {
+        if (orig && punch) {
+            punch.notes = notes;
+            changed = !orig.equals(punch);
+        }
+    }
+
+    function removeTag(index: number) {
+        if (orig && punch) {
+            availableTags.push(tagged[index]);
+            tagged.splice(index, 1);
+            punch?.tags.splice(index, 1);
+            changed = !orig.equals(punch);
+        }
+    }
+
+    function addTag(index: number) {
+        if (orig && punch) {
+            let tag = availableTags[index];
+            availableTags.splice(index, 1);
+            tagged.push(tag);
+            punch?.tags.push(tag.id);
+            changed = !orig.equals(punch);
+        }
+    }
+
+    async function save() {
+        if (punch) {
+            if (punch.id == 0) {
+                await addPunch(punch);
+            } else {
+                await updatePunch(punch, index);
+            }
+            close();
+        }
+    }
+
+    async function trash() {
+        if (punch) {
+            await deletePunch(punch.id, index);
+        }
+        close();
     }
 
     $effect(() => {
-        if (punch && punch.end === undefined) {
-            let unsub = timer.subscribe(() => {
-                delta = punch!.getDelta();
-            });
-            return () => unsub();
-        }
+        const tagArray = [...tags.map.values()];
+        console.log(JSON.stringify(tagArray));
     });
 </script>
 
@@ -71,7 +122,10 @@
             })}
         </h2>
         <div class="flex flex-wrap gap-2 text-center text-[1.06rem]">
-            <div class="flex flex-col bg-slate-300/80 rounded p-2 flex-1">
+            <!-- Start Box -->
+            <div
+                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 min-w-32 justify-center"
+            >
                 <span>
                     {punch?.start.toLocaleDateString([])}
                 </span>
@@ -82,8 +136,10 @@
                     })}
                 </span>
             </div>
+
+            <!-- End Box -->
             <div
-                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 justify-center items-center"
+                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 min-w-32 justify-center"
             >
                 {#if punch?.end != null}
                     <span>
@@ -124,6 +180,7 @@
                 value={punch?.notes}
                 placeholder="Notes here..."
                 class="bg-slate-200/80 p-2 rounded focus:bg-slate-300/70 focus:outline-none transition-all duration-300"
+                oninput={(e) => changeNotes(e.currentTarget.value)}
             ></textarea>
         </div>
 
@@ -182,19 +239,22 @@
         </div>
 
         <!-- Save Button -->
-        <button
-            class="btn outline-none border-none bg-blue-600 rounded text-lg text-white h-8 m-0"
-            onclick={async () => {
-                if (punch) {
-                    if (punch.id == 0) {
-                        await addPunch(punch);
-                    } else {
-                        await updatePunch(punch, index);
-                    }
-                }
-            }}
-        >
-            Save
-        </button>
+        <div class="flex flex-col gap-2">
+            <button
+                class="btn flex-1 outline-none border-none bg-blue-600 rounded duration-200 transition-all text-lg text-white h-8 m-0 disabled:bg-slate-400 disabled:text-gray-300"
+                disabled={!changed}
+                onclick={async () => await save()}
+            >
+                Save
+            </button>
+            {#if punch && punch.id !== 0}
+                <button
+                    class="btn flex-1 outline-none border-none bg-red-500 rounded text-lg text-white h-8 m-0 min-w-28"
+                    onclick={async () => await trash()}
+                >
+                    Delete
+                </button>
+            {/if}
+        </div>
     </div>
 </Modal>

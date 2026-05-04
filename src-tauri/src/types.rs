@@ -52,16 +52,6 @@ impl AppState {
         Ok(state)
     }
 
-    // pub async fn update(db: &Db, state: AppState) -> Result<(), AppError> {
-    //     let conn = db.conn().await;
-    //     conn.execute(
-    //         "UPDATE state SET job_id = ?1, theme = ?2",
-    //         (state.job.id, state.theme),
-    //     )
-    //     .await?;
-    //     Ok(())
-    // }
-
     pub async fn change_job(db: &Db, job_id: u64) -> Result<AppState, AppError> {
         db.conn()
             .await
@@ -178,19 +168,21 @@ impl Punch {
     );
     "#;
 
-    fn tags_string(tags: Vec<u64>) -> String {
-        let tgs = tags
-            .iter()
-            .map(|tag| tag.to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-        // let t = tags.map(|list| {
-        //     list.iter()
-        //         .map(|tag| tag.to_string())
-        //         .collect::<Vec<String>>()
-        //         .join(",")
-        // });
-        return tgs;
+    fn tags_string(mut tags: Vec<u64>) -> String {
+        if tags.is_empty() {
+            return "".to_string();
+        } else if tags.len() == 1 {
+            return tags.pop().unwrap().to_string();
+        } else {
+            let mut s = String::new();
+            let mut iter = tags.iter();
+            s.push_str(&iter.next().unwrap().to_string());
+            for tag in iter {
+                s.push(',');
+                s.push_str(&tag.to_string());
+            }
+            return s;
+        }
     }
 
     // pub fn new() -> Self {
@@ -205,12 +197,12 @@ impl Punch {
     //     }
     // }
 
-    pub async fn get_for_job(db: &Db, job_id: u64) -> Result<Vec<Punch>, AppError> {
+    pub async fn get_for_current_job(db: &Db) -> Result<Vec<Punch>, AppError> {
         let conn = db.conn().await;
         let punches = Punch::from_rows(
             conn.query(
-                "SELECT * FROM punches WHERE job_id = ?1 ORDER BY start ASC",
-                [job_id],
+                "SELECT * FROM punches WHERE job_id = (SELECT job_id FROM state) ORDER BY start ASC",
+                (),
             )
             .await?,
         )
@@ -255,22 +247,30 @@ impl Punch {
 
     pub async fn update(db: &Db, punch: Punch) -> Result<(), AppError> {
         let conn = db.conn().await;
+        let tags = Punch::tags_string(punch.tags);
         conn.execute(
-            r#"
+            format!(
+                r#"
             UPDATE punches
             SET job_id = ?1,
                 start = strftime('%Y-%m-%dT%H:%M:%SZ', ?2),
                 end = strftime('%Y-%m-%dT%H:%M:%SZ', ?3),
                 delta_sec = unixepoch(?3) - unixepoch(?2),
+                delta_sec = {},
                 tags = ?4,
                 notes = ?5
             WHERE id = ?6
             "#,
+                match punch.end {
+                    Some(_) => "unixepoch(?3) - unixepoch(?2)",
+                    None => "0",
+                }
+            ),
             (
                 punch.job_id,
                 punch.start,
                 punch.end,
-                Punch::tags_string(punch.tags),
+                tags,
                 punch.notes,
                 punch.id,
             ),
@@ -279,24 +279,28 @@ impl Punch {
         Ok(())
     }
 
-    pub async fn clock_in(db: &Db, job_id: u64, tags: Vec<u64>) -> Result<Punch, AppError> {
+    pub async fn delete(db: &Db, punch_id: u64) -> Result<(), AppError> {
+        let conn = db.conn().await;
+        conn.execute("DELETE FROM punches WHERE id = ?1", [punch_id])
+            .await?;
+        Ok(())
+    }
+
+    pub async fn clock_in(db: &Db, tags: Vec<u64>) -> Result<Punch, AppError> {
         let conn = db.conn().await;
         let mut rows = conn
             .query(
                 r#"
                 INSERT INTO punches (job_id, start, tags)
-                SELECT ?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?2
-                WHERE NOT EXISTS (SELECT 1 FROM punches)
-                OR NOT EXISTS (SELECT 1 FROM punches WHERE job_id = ?1 AND end IS NULL LIMIT 1)
+                SELECT s.job_id, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?1
+                FROM state s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM punches
+                    WHERE job_id = s.job_id AND end IS NULL LIMIT 1
+                )
                 RETURNING *;
                 "#,
-                (
-                    job_id,
-                    tags.iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(","),
-                ),
+                [Punch::tags_string(tags)],
             )
             .await?;
         if let Some(row) = rows.next().await? {
@@ -306,7 +310,24 @@ impl Punch {
         }
     }
 
-    pub async fn clock_out(db: &Db, job_id: u64) -> Result<Punch, AppError> {
+    pub async fn re_clock_in(db: &Db) -> Result<(), AppError> {
+        let conn = db.conn().await;
+        conn.execute(
+            r#"
+            UPDATE punches SET end = NULL
+            WHERE job_id = (SELECT job_id FROM state) AND id = (
+                SELECT id FROM punches
+                WHERE job_id = (SELECT job_id FROM state)
+                ORDER BY start DESC LIMIT 1
+            );
+            "#,
+            (),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn clock_out(db: &Db) -> Result<Punch, AppError> {
         let conn = db.conn().await;
         let mut rows = conn
             .query(
@@ -314,10 +335,10 @@ impl Punch {
             UPDATE punches
             SET end = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
                 delta_sec = unixepoch('now') - unixepoch(punches.start)
-            WHERE job_id = ?1 AND end IS NULL
+            WHERE job_id = (SELECT job_id FROM state) AND end IS NULL
             RETURNING *
             LIMIT 1;"#,
-                [job_id],
+                (),
             )
             .await?;
         if let Some(row) = rows.next().await? {
@@ -345,7 +366,6 @@ impl Punch {
                 .map(|s| s.parse::<u64>().unwrap_or(0))
                 .collect()
         };
-
         Ok(Punch {
             id: row.get(0)?,
             job_id: row.get(1)?,

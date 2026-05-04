@@ -3,12 +3,12 @@
     import { Punch } from "$lib/types";
     import { clockIn, clockOut } from "$lib/commands";
     import { appState, punches } from "$lib/state.svelte";
-    import { getContext } from "svelte";
     import Menu from "@lucide/svelte/icons/menu";
     import Settings from "@lucide/svelte/icons/settings";
     import Play from "@lucide/svelte/icons/play";
     import Stop from "@lucide/svelte/icons/square";
     import AddClock from "@lucide/svelte/icons/clock-plus";
+    import { getContext } from "svelte";
 
     const editPunch: (punch: Punch, listIndex: number) => void =
         getContext("editPunch");
@@ -26,9 +26,9 @@
                 <Menu />
             </button>
             <button
-                class="btn border-none bg-none hover:bg-white/20 px-3 rounded-md flex-1 justify-start"
+                class="border-none bg-none hover:bg-white/20 min-h-10 px-3 py-1 rounded-md flex-1 justify-start transition-all duration-200 hover:cursor-pointer"
             >
-                <h1 class="text-[1.3rem] font-bold">
+                <h1 class="text-[1.3rem]/7 font-bold">
                     {appState.state?.job.name}
                 </h1>
             </button>
@@ -54,7 +54,7 @@
     <!-- Bottom Buttons -->
     <div class="flex flex-wrap mt-auto p-1.5 gap-1.5">
         <button
-            class="btn flex-1 bg-blue-600 text-white text-[1rem]/4 text-nowrap border-none rounded-md gap-2 focus:border-none focus:outline-none"
+            class="btn flex-1 bg-blue-600 text-white text-[1rem]/4 text-nowrap border-none rounded gap-2 focus:border-none focus:outline-none"
             onclick={() => editPunch(new Punch(appState.state!.job.id), -1)}
         >
             <div>
@@ -66,7 +66,7 @@
         <button
             class="btn border-none flex-1 {appState.state?.job.clocked_in
                 ? 'bg-red-500'
-                : 'bg-green-600'} rounded-md text-white text-[1rem]/4 text-nowrap"
+                : 'bg-green-600'} rounded text-white text-[1rem]/4 text-nowrap"
             onclick={async () => {
                 if (appState.state?.job.clocked_in) {
                     await clockOut();
