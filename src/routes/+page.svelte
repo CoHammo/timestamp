@@ -17,7 +17,7 @@
 <main class="h-screen flex flex-col">
     <!-- App Bar -->
     <div
-        class="w-full flex bg-blue-600 justify-between text-white px-2 py-3 min-h-18 items-center"
+        class="w-full flex bg-blue-600 justify-between text-white px-2 py-2 min-h-18 items-center gap-1"
     >
         <div class="flex items-center gap-0.5 flex-1">
             <button
@@ -26,9 +26,9 @@
                 <Menu />
             </button>
             <button
-                class="border-none bg-none hover:bg-white/20 min-h-10 px-3 py-1 rounded-md flex-1 justify-start transition-all duration-200 hover:cursor-pointer"
+                class="border-none bg-none hover:bg-white/20 min-h-10 px-2 py-1 rounded-md flex-1 justify-start transition-all duration-200 hover:cursor-pointer"
             >
-                <h1 class="text-[1.3rem]/7 font-bold">
+                <h1 class="text-[1.4rem]/7 font-bold">
                     {appState.state?.job.name}
                 </h1>
             </button>
@@ -43,7 +43,9 @@
     </div>
 
     <!-- List of Punches for the Current Job -->
-    <div class="flex flex-col gap-2 p-2 overflow-y-auto">
+    <div
+        class="flex flex-col gap-2 p-2 overflow-y-auto min-[600px]:min-w-150 min-[600px]:self-center"
+    >
         {#each { length: punches.list.length } as _, index}
             {@const i = punches.list.length - 1 - index}
             {@const punch = punches.list[i]}
