@@ -31,15 +31,15 @@
     });
 
     const large = new MediaQuery("min-width: 400px");
-    const larger = new MediaQuery("min-width: 550px");
+    const larger = new MediaQuery("min-width: 500px");
 </script>
 
-<div class="flex flex-row rounded-md overflow-hidden">
+<div class="flex flex-row rounded-md overflow-hidden min-w-52">
     <button
         onclick={() => editPunch(punch, listIndex)}
         class="grid grid-cols-[auto_1fr] grid-rows-[auto_1fr_auto] flex-1 {punch.end ==
         undefined
-            ? 'bg-green-300'
+            ? 'bg-blue-200'
             : 'bg-slate-300/80'} px-3 py-2 hover:cursor-pointer focus:outline-none transition-all duration-300"
     >
         <!-- Date -->

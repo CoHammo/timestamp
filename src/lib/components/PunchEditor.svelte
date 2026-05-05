@@ -1,8 +1,9 @@
 <script lang="ts">
     import Tags from "@lucide/svelte/icons/tags";
-    import Square from "@lucide/svelte/icons/square";
-    import Play from "@lucide/svelte/icons/play";
-    import { TagCard } from "./index";
+    import RightArrow from "@lucide/svelte/icons/arrow-right";
+    import Refresh from "@lucide/svelte/icons/rotate-ccw";
+    import { DatePicker, TagCard } from "./index";
+    import "cally";
     import {
         updatePunch,
         addPunch,
@@ -18,6 +19,7 @@
     let modal: Modal | undefined = $state();
     let orig: Punch | undefined = $state();
     let punch: Punch | undefined = $state();
+    let currentEnd: Date | undefined = $state();
     let tagged: Tag[] = $state([]);
     let availableTags: Tag[] = $state([]);
     let index: number = $state(-1);
@@ -41,8 +43,10 @@
             .filter((t) => !punch?.tags.includes(t.id))
             .toArray();
         if (punch.end === undefined) {
+            currentEnd = new Date();
             unsub = timer.subscribe(() => {
                 delta = punch!.getDelta();
+                currentEnd = new Date();
             });
         }
         changed = !orig.equals(punch);
@@ -60,6 +64,28 @@
             unsub?.();
             changed = false;
         }, 100);
+    }
+
+    function reset() {
+        if (orig && punch) {
+            punch = orig.clone();
+            delta = punch.getDelta();
+            tagged = punch.tags.map((id) => tags.map.get(id)!);
+            availableTags = tags.map
+                .values()
+                .filter((t) => !punch?.tags.includes(t.id))
+                .toArray();
+            unsub?.();
+            currentEnd = undefined;
+            if (punch.end === undefined) {
+                currentEnd = new Date();
+                unsub = timer.subscribe(() => {
+                    delta = punch!.getDelta();
+                    currentEnd = new Date();
+                });
+            }
+            changed = !orig.equals(punch);
+        }
     }
 
     function changeNotes(notes: string) {
@@ -110,9 +136,18 @@
         const tagArray = [...tags.map.values()];
         console.log(JSON.stringify(tagArray));
     });
+
+    let datePicker: DatePicker | undefined = $state();
 </script>
 
 <Modal bind:this={modal}>
+    <button
+        disabled={!changed}
+        onclick={() => reset()}
+        class="btn btn-circle border-none w-10 h-10 absolute top-1 left-1 bg-none hover:bg-gray-200"
+    >
+        <Refresh size={23} color={!changed ? "gray" : "blue"} />
+    </button>
     <div class="flex flex-col gap-2 p-2">
         <h2 class="font-bold text-center px-8 mb-1 mt-2 text-[1.3rem]">
             {punch?.start.toLocaleDateString([], { weekday: "long" })},
@@ -124,12 +159,25 @@
         <div class="flex flex-wrap gap-2 text-center text-[1.06rem]">
             <!-- Start Box -->
             <div
-                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 min-w-32 justify-center"
+                class="flex flex-wrap flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
             >
-                <span>
+                <button
+                    popovertarget="start-date-popover"
+                    style="anchor-name:--start-date-anchor"
+                    onclick={() => datePicker?.open(punch?.start)}
+                    class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 transition-all"
+                >
                     {punch?.start.toLocaleDateString([])}
-                </span>
-                <span>
+                </button>
+                <div
+                    popover
+                    id="start-date-popover"
+                    style="position-anchor:--start-date-anchor"
+                    class="dropdown bg-white rounded border-none outline-none shadow-[1px_1px_4px]"
+                >
+                    <DatePicker bind:this={datePicker} />
+                </div>
+                <span class="flex-1 py-1.5 px-3">
                     {punch?.start.toLocaleTimeString([], {
                         hour: "numeric",
                         minute: "2-digit",
@@ -138,37 +186,45 @@
             </div>
 
             <!-- End Box -->
-            <div
-                class="flex flex-col bg-slate-300/80 rounded p-2 flex-1 min-w-32 justify-center"
-            >
-                {#if punch?.end != null}
-                    <span>
+            {#if punch?.end === undefined}
+                <div
+                    class="flex flex-wrap flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem] text-gray-700"
+                >
+                    <span class="border-r py-1.5 px-3">
+                        {currentEnd?.toLocaleDateString([])}
+                    </span>
+                    <span class="flex-1 py-1.5 px-3">
+                        {currentEnd?.toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                        })}
+                    </span>
+                </div>
+            {:else}
+                <div
+                    class="flex flex-wrap flex-1 bg-slate-300/80 rounded min-w-44 text-[1.1rem] justify-center"
+                >
+                    <span class="border-r py-1.5 px-3">
                         {punch?.end?.toLocaleDateString([])}
                     </span>
-                    <span>
+                    <span class="flex-1 py-1.5 px-3">
                         {punch?.end?.toLocaleTimeString([], {
                             hour: "numeric",
                             minute: "2-digit",
                         })}
                     </span>
-                {:else}
-                    <span class="font-bold">
-                        {delta.hours}h
-                        {delta.minutes}m
-                        {delta.seconds}s
-                    </span>
-                {/if}
-            </div>
+                </div>
+            {/if}
         </div>
-        {#if punch?.end != null}
-            <div
-                class="bg-slate-300/80 rounded p-2 text-center font-bold text-[1.2rem]"
-            >
-                {delta.hours}h
-                {delta.minutes}m
-                {delta.seconds}s
-            </div>
-        {/if}
+
+        <!-- Timer -->
+        <div
+            class="bg-slate-300/80 rounded p-1.5 text-center font-bold text-[1.2rem]"
+        >
+            {delta.hours}h
+            {delta.minutes}m
+            {delta.seconds}s
+        </div>
 
         <!-- Notes Box -->
         <div class="flex flex-col">
@@ -179,7 +235,7 @@
                 rows="4"
                 value={punch?.notes}
                 placeholder="Notes here..."
-                class="bg-slate-200/80 p-2 rounded focus:bg-slate-300/70 focus:outline-none transition-all duration-300"
+                class="bg-slate-200/80 p-2 placeholder:text-gray-700 rounded focus:bg-slate-300/70 focus:outline-none transition-all duration-300"
                 oninput={(e) => changeNotes(e.currentTarget.value)}
             ></textarea>
         </div>
@@ -238,8 +294,9 @@
             </div>
         </div>
 
-        <!-- Save Button -->
+        <!-- Buttons -->
         <div class="flex flex-col gap-2">
+            <!-- Save Button -->
             <button
                 class="btn flex-1 outline-none border-none bg-blue-600 rounded duration-200 transition-all text-lg text-white h-8 m-0 disabled:bg-slate-400 disabled:text-gray-300"
                 disabled={!changed}
@@ -247,6 +304,8 @@
             >
                 Save
             </button>
+
+            <!-- Delete Button -->
             {#if punch && punch.id !== 0}
                 <button
                     class="btn flex-1 outline-none border-none bg-red-500 rounded text-lg text-white h-8 m-0 min-w-28"

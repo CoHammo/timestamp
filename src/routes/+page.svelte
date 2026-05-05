@@ -44,7 +44,7 @@
 
     <!-- List of Punches for the Current Job -->
     <div
-        class="flex flex-col gap-2 p-2 overflow-y-auto min-[600px]:min-w-150 min-[600px]:self-center"
+        class="flex flex-col gap-2 p-2 overflow-y-auto min-[635px]:min-w-160 min-[635px]:self-center"
     >
         {#each { length: punches.list.length } as _, index}
             {@const i = punches.list.length - 1 - index}
