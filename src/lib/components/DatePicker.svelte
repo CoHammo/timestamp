@@ -30,7 +30,7 @@
     }
 
     export function open(
-        d?: Date,
+        dt: Date,
         max: Date = new Date(),
         min?: Date,
         onPick?: (date: Date | undefined) => void,
@@ -42,9 +42,9 @@
         minDate.setHours(0, 0, 0, 0);
         onChoose = onPick;
         canDelete = canUnpick;
-        if (d) {
-            chosenDate = new SvelteDate(d);
-            changeView(d);
+        if (dt) {
+            chosenDate = new SvelteDate(dt);
+            changeView(dt);
         } else {
             changeView(new Date());
         }
