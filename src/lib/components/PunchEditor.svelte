@@ -2,7 +2,7 @@
     import Tags from "@lucide/svelte/icons/tags";
     import RightArrow from "@lucide/svelte/icons/arrow-right";
     import Refresh from "@lucide/svelte/icons/rotate-ccw";
-    import { DatePicker, TagCard } from "./index";
+    import { DatePicker, TagCard, TimePicker } from "./index";
     import "cally";
     import {
         updatePunch,
@@ -150,6 +150,7 @@
             <div
                 class="flex flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
             >
+                <!-- Start Date Button -->
                 {#key startChanged}
                     <button
                         popovertarget="start-date-popover"
@@ -173,31 +174,48 @@
                         {punch?.start.toLocaleDateString([])}
                     </button>
                 {/key}
+                <!-- Start DatePicker Popover -->
                 <div
                     popover
                     ontoggle={(e) => {
                         if (e.newState === "closed") {
-                            startPicker?.close();
+                            setTimeout(() => startPicker?.close(), 150);
                         }
                     }}
                     id="start-date-popover"
                     style="position-anchor:--start-date-anchor"
-                    class="dropdown bg-white rounded border-none outline-none shadow-[1px_1px_4px]"
+                    class="dropdown bg-white rounded border-none outline-none content-center shadow-[1px_1px_4px]"
                 >
                     <DatePicker bind:this={startPicker} />
                 </div>
-                <span class="flex-1 py-1.5 px-3 min-w-28">
+
+                <!-- Start Time Button -->
+                <button
+                    popovertarget="start-time-popover"
+                    style="anchor-name:--start-time-anchor"
+                    class="flex-1 py-1.5 px-3 min-w-28 content-center"
+                >
                     {punch?.start.toLocaleTimeString([], {
                         hour: "numeric",
                         minute: "2-digit",
                     })}
-                </span>
+                </button>
+                <!-- Start TimePicker Popover -->
+                <div
+                    popover
+                    id="start-time-popover"
+                    style="position-anchor:--start-time-anchor"
+                    class="dropdown bg-white rounded border-none outline-none content-center shadow-[1px_1px_4px]"
+                >
+                    <TimePicker />
+                </div>
             </div>
 
             <!-- End Box -->
             <div
                 class="flex flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
             >
+                <!-- End Date Button -->
                 {#key endChanged}
                     <button
                         popovertarget="end-date-popover"
@@ -222,16 +240,17 @@
                                 },
                                 index === punches.list.length - 1,
                             )}
-                        class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 transition-all w-26"
+                        class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 content-center transition-all w-26"
                     >
                         {currentEnd?.toLocaleDateString([])}
                     </button>
                 {/key}
+                <!-- End DatePicker Popover -->
                 <div
                     popover
                     ontoggle={(e) => {
                         if (e.newState === "closed") {
-                            endPicker?.close();
+                            setTimeout(() => endPicker?.close(), 150);
                         }
                     }}
                     id="end-date-popover"
@@ -240,12 +259,14 @@
                 >
                     <DatePicker bind:this={endPicker} />
                 </div>
-                <span class="flex-1 py-1.5 px-3 min-w-28">
+
+                <!-- End Time Button -->
+                <button class="flex-1 py-1.5 px-3 min-w-28 content-center">
                     {currentEnd?.toLocaleTimeString([], {
                         hour: "numeric",
                         minute: "2-digit",
                     })}
-                </span>
+                </button>
             </div>
         </div>
 

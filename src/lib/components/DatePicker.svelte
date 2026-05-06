@@ -133,7 +133,7 @@
                             }
                         }}
                         class="h-9 w-9 hover:cursor-pointer rounded transition-all {chosen
-                            ? 'bg-slate-800 text-white font-bold'
+                            ? 'bg-blue-600 text-white font-bold'
                             : 'hover:bg-gray-300'}">{day}</button
                     >
                 {/if}
