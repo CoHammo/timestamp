@@ -7,7 +7,7 @@
     import { tags, timer } from "../state.svelte";
     import { MediaQuery } from "svelte/reactivity";
     import { deletePunch } from "$lib/commands";
-    import { slide } from "svelte/transition";
+    import { fade, slide } from "svelte/transition";
 
     let { punch, listIndex }: { punch: Punch; listIndex: number } = $props();
 
@@ -34,7 +34,7 @@
     const larger = new MediaQuery("min-width: 500px");
 </script>
 
-<div class="flex flex-row rounded-md overflow-hidden min-w-52">
+<div class="flex flex-row rounded-md overflow-hidden min-w-56">
     <button
         onclick={() => editPunch(punch, listIndex)}
         class="grid grid-cols-[auto_1fr] grid-rows-[auto_1fr_auto] flex-1 {punch.end ==
@@ -99,14 +99,18 @@
                     minute: "numeric",
                 })}</span
             >
+
+            <!-- End Time (If Wide Screen) -->
             {#if large.current && punch.end !== undefined}
-                <span class="mx-0.5">-</span>
-                <span class="text-[1.05rem]"
-                    >{punch.end?.toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "numeric",
-                    })}</span
-                >
+                <div transition:slide={{ axis: "x" }}>
+                    <span class="mx-0.5">-</span>
+                    <span class="text-[1.05rem]"
+                        >{punch.end?.toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "numeric",
+                        })}</span
+                    >
+                </div>
             {/if}
 
             <!-- Notes -->

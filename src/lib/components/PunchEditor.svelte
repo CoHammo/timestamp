@@ -32,24 +32,32 @@
     let unsub: () => void | undefined;
     let changed = $state(false);
 
+    function setPunch() {
+        if (orig) {
+            punch = orig.clone();
+            delta = punch.getDelta();
+            tagged = punch.tags.map((id) => tags.map.get(id)!);
+            availableTags = tags.map
+                .values()
+                .filter((t) => !punch?.tags.includes(t.id))
+                .toArray();
+            unsub?.();
+            currentEnd = punch.end;
+            if (punch.end === undefined) {
+                currentEnd = new Date();
+                unsub = timer.subscribe(() => {
+                    delta = punch!.getDelta();
+                    currentEnd = new Date();
+                });
+            }
+            changed = !orig.equals(punch);
+        }
+    }
+
     export function open(p: Punch, listIndex: number) {
         orig = p;
-        punch = p.clone();
-        delta = punch.getDelta();
+        setPunch();
         index = listIndex;
-        tagged = punch.tags.map((id) => tags.map.get(id)!);
-        availableTags = tags.map
-            .values()
-            .filter((t) => !punch?.tags.includes(t.id))
-            .toArray();
-        if (punch.end === undefined) {
-            currentEnd = new Date();
-            unsub = timer.subscribe(() => {
-                delta = punch!.getDelta();
-                currentEnd = new Date();
-            });
-        }
-        changed = !orig.equals(punch);
         modal?.open();
     }
 
@@ -64,28 +72,6 @@
             unsub?.();
             changed = false;
         }, 100);
-    }
-
-    function reset() {
-        if (orig && punch) {
-            punch = orig.clone();
-            delta = punch.getDelta();
-            tagged = punch.tags.map((id) => tags.map.get(id)!);
-            availableTags = tags.map
-                .values()
-                .filter((t) => !punch?.tags.includes(t.id))
-                .toArray();
-            unsub?.();
-            currentEnd = undefined;
-            if (punch.end === undefined) {
-                currentEnd = new Date();
-                unsub = timer.subscribe(() => {
-                    delta = punch!.getDelta();
-                    currentEnd = new Date();
-                });
-            }
-            changed = !orig.equals(punch);
-        }
     }
 
     function changeNotes(notes: string) {
@@ -137,13 +123,16 @@
         console.log(JSON.stringify(tagArray));
     });
 
-    let datePicker: DatePicker | undefined = $state();
+    let startPicker: DatePicker | undefined = $state();
+    let endPicker: DatePicker | undefined = $state();
+    let startChanged = $state(false);
+    let endChanged = $state(false);
 </script>
 
 <Modal bind:this={modal}>
     <button
         disabled={!changed}
-        onclick={() => reset()}
+        onclick={() => setPunch()}
         class="btn btn-circle border-none w-10 h-10 absolute top-1 left-1 bg-none hover:bg-gray-200"
     >
         <Refresh size={23} color={!changed ? "gray" : "blue"} />
@@ -159,25 +148,45 @@
         <div class="flex flex-wrap gap-2 text-center text-[1.06rem]">
             <!-- Start Box -->
             <div
-                class="flex flex-wrap flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
+                class="flex flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
             >
-                <button
-                    popovertarget="start-date-popover"
-                    style="anchor-name:--start-date-anchor"
-                    onclick={() => datePicker?.open(punch?.start)}
-                    class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 transition-all"
-                >
-                    {punch?.start.toLocaleDateString([])}
-                </button>
+                {#key startChanged}
+                    <button
+                        popovertarget="start-date-popover"
+                        style="anchor-name:--start-date-anchor"
+                        onclick={() =>
+                            startPicker?.open(
+                                punch?.start,
+                                currentEnd,
+                                undefined,
+                                (d) => {
+                                    if (orig && punch && d) {
+                                        punch.start = d;
+                                        startChanged = !startChanged;
+                                        changed = !orig.equals(punch);
+                                        delta = punch.getDelta();
+                                    }
+                                },
+                            )}
+                        class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 transition-all w-26"
+                    >
+                        {punch?.start.toLocaleDateString([])}
+                    </button>
+                {/key}
                 <div
                     popover
+                    ontoggle={(e) => {
+                        if (e.newState === "closed") {
+                            startPicker?.close();
+                        }
+                    }}
                     id="start-date-popover"
                     style="position-anchor:--start-date-anchor"
                     class="dropdown bg-white rounded border-none outline-none shadow-[1px_1px_4px]"
                 >
-                    <DatePicker bind:this={datePicker} />
+                    <DatePicker bind:this={startPicker} />
                 </div>
-                <span class="flex-1 py-1.5 px-3">
+                <span class="flex-1 py-1.5 px-3 min-w-28">
                     {punch?.start.toLocaleTimeString([], {
                         hour: "numeric",
                         minute: "2-digit",
@@ -186,35 +195,58 @@
             </div>
 
             <!-- End Box -->
-            {#if punch?.end === undefined}
-                <div
-                    class="flex flex-wrap flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem] text-gray-700"
-                >
-                    <span class="border-r py-1.5 px-3">
+            <div
+                class="flex flex-1 bg-slate-300/80 rounded overflow-hidden min-w-48 text-[1.1rem]"
+            >
+                {#key endChanged}
+                    <button
+                        popovertarget="end-date-popover"
+                        style="anchor-name:--end-date-anchor"
+                        onclick={() =>
+                            endPicker?.open(
+                                punch?.end,
+                                undefined,
+                                punch?.start,
+                                (d) => {
+                                    if (orig && punch) {
+                                        punch.end = d;
+                                        if (!d) {
+                                            currentEnd = new Date();
+                                        } else {
+                                            currentEnd = d;
+                                        }
+                                        endChanged = !endChanged;
+                                        changed = !orig.equals(punch);
+                                        delta = punch.getDelta();
+                                    }
+                                },
+                                index === punches.list.length - 1,
+                            )}
+                        class="border-r py-1.5 px-3 hover:cursor-pointer hover:bg-slate-400/80 transition-all w-26"
+                    >
                         {currentEnd?.toLocaleDateString([])}
-                    </span>
-                    <span class="flex-1 py-1.5 px-3">
-                        {currentEnd?.toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                        })}
-                    </span>
-                </div>
-            {:else}
+                    </button>
+                {/key}
                 <div
-                    class="flex flex-wrap flex-1 bg-slate-300/80 rounded min-w-44 text-[1.1rem] justify-center"
+                    popover
+                    ontoggle={(e) => {
+                        if (e.newState === "closed") {
+                            endPicker?.close();
+                        }
+                    }}
+                    id="end-date-popover"
+                    style="position-anchor:--end-date-anchor"
+                    class="dropdown bg-white rounded border-none outline-none shadow-[1px_1px_4px]"
                 >
-                    <span class="border-r py-1.5 px-3">
-                        {punch?.end?.toLocaleDateString([])}
-                    </span>
-                    <span class="flex-1 py-1.5 px-3">
-                        {punch?.end?.toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                        })}
-                    </span>
+                    <DatePicker bind:this={endPicker} />
                 </div>
-            {/if}
+                <span class="flex-1 py-1.5 px-3 min-w-28">
+                    {currentEnd?.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                    })}
+                </span>
+            </div>
         </div>
 
         <!-- Timer -->
